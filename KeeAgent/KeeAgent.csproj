@@ -10,7 +10,7 @@
     </PlgxConfiguration>
     <NuGetPackageImportStamp>
     </NuGetPackageImportStamp>
-    <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup>
@@ -256,12 +256,12 @@
   </ItemGroup>
   <ItemGroup Condition=" '$(OS)' != 'Unix' ">
     <PackageReference Include="KeePass" ExcludeAssets="Compile" GeneratePathProperty="true">
-      <Version>2.50.0.21065</Version>
+      <Version>2.59.0</Version>
       <ExcludeFromPlgx />
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="ILRepack">
-      <Version>2.0.20</Version>
+      <Version>2.0.44</Version>
       <PrivateAssets>all</PrivateAssets>
       <ExcludeFromPlgx />
     </PackageReference>
