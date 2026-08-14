@@ -42,3 +42,6 @@ test-results*/
 
 #ignore jetbrains rider files
 .idea/
+
+# Local portable KeePass installation used for development
+/KeePass/
