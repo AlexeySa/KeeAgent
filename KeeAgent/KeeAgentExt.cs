@@ -10,6 +10,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Net.Sockets;
+using System.Security.Principal;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -61,6 +62,10 @@ namespace KeeAgent
     const string inheritSocketFilePermissionsOptionName =
       pluginNamespace + ".InheritSocketFilePermissions";
     const string useWindowsOpenSshPipeName = pluginNamespace + ".UseWindowsOpenSshPipe";
+    const string useWindowsOpenSshAllowedUsersOptionName =
+      pluginNamespace + ".UseWindowsOpenSshAllowedUsers";
+    const string windowsOpenSshAllowedUsersOptionName =
+      pluginNamespace + ".WindowsOpenSshAllowedUsers";
     const string unixSocketPathOptionName = pluginNamespace + ".UnixSocketPath";
     const string userPicksKeyOnRequestIdentitiesOptionName =
       pluginNamespace + ".UserPicksKeyOnRequestIdentities";
@@ -447,7 +452,18 @@ namespace KeeAgent
         return;
       try {
         pagent.StopWindowsOpenSshPipe();
-        pagent.StartWindowsOpenSshPipe();
+        var allowedIdentitySids = new List<SecurityIdentifier>();
+        if (Options.UseWindowsOpenSshAllowedUsers) {
+          List<string> unresolvedIdentityNames;
+          allowedIdentitySids = ResolveWindowsIdentityNames(
+            Options.WindowsOpenSshAllowedUsers, out unresolvedIdentityNames);
+          if (unresolvedIdentityNames.Count > 0) {
+            MessageService.ShowWarning(
+              "Some Windows OpenSSH access entries could not be resolved and were ignored:",
+              string.Join(Environment.NewLine, unresolvedIdentityNames));
+          }
+        }
+        pagent.StartWindowsOpenSshPipe(allowedIdentitySids);
       }
       catch (PageantRunningException) {
         MessageService.ShowWarning("Windows OpenSSH agent is already running.",
@@ -466,6 +482,59 @@ namespace KeeAgent
       if (pagent == null)
         return;
       pagent.StopWindowsOpenSshPipe();
+    }
+
+    internal static string NormalizeWindowsIdentityNames(string identityNames)
+    {
+      return string.Join("; ", ParseWindowsIdentityNames(identityNames));
+    }
+
+    internal static List<SecurityIdentifier> ResolveWindowsIdentityNames(
+      string identityNames, out List<string> unresolvedIdentityNames)
+    {
+      var resolvedSids = new List<SecurityIdentifier>();
+      var uniqueSids = new HashSet<SecurityIdentifier>();
+      unresolvedIdentityNames = new List<string>();
+
+      foreach (var identityName in ParseWindowsIdentityNames(identityNames)) {
+        var nameToResolve = identityName;
+        if (nameToResolve.StartsWith(@".\", StringComparison.Ordinal)) {
+          nameToResolve = Environment.MachineName + nameToResolve.Substring(1);
+        }
+
+        try {
+          var sid = (SecurityIdentifier)new NTAccount(nameToResolve)
+            .Translate(typeof(SecurityIdentifier));
+          if (uniqueSids.Add(sid)) {
+            resolvedSids.Add(sid);
+          }
+        }
+        catch (IdentityNotMappedException) {
+          unresolvedIdentityNames.Add(identityName);
+        }
+      }
+
+      return resolvedSids;
+    }
+
+    private static List<string> ParseWindowsIdentityNames(string identityNames)
+    {
+      var result = new List<string>();
+      var uniqueNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+      if (string.IsNullOrWhiteSpace(identityNames)) {
+        return result;
+      }
+
+      var names = identityNames.Split(new[] { ";", "\r\n", "\n", "\r" },
+        StringSplitOptions.None);
+      foreach (var name in names) {
+        var trimmedName = name.Trim();
+        if (trimmedName.Length > 0 && uniqueNames.Add(trimmedName)) {
+          result.Add(trimmedName);
+        }
+      }
+
+      return result;
     }
 
     public void StartUnixSocket()
@@ -651,6 +720,10 @@ namespace KeeAgent
       config.SetBool(inheritSocketFilePermissionsOptionName,
         Options.InheritSocketFilePermissions);
       config.SetBool(useWindowsOpenSshPipeName, Options.UseWindowsOpenSshPipe);
+      config.SetBool(useWindowsOpenSshAllowedUsersOptionName,
+        Options.UseWindowsOpenSshAllowedUsers);
+      config.SetString(windowsOpenSshAllowedUsersOptionName,
+        Options.WindowsOpenSshAllowedUsers);
       config.SetString(unixSocketPathOptionName, Options.UnixSocketPath);
       config.SetBool(userPicksKeyOnRequestIdentitiesOptionName,
         Options.UserPicksKeyOnRequestIdentities);
@@ -676,6 +749,10 @@ namespace KeeAgent
       Options.InheritSocketFilePermissions =
         config.GetBool(inheritSocketFilePermissionsOptionName, false);
       Options.UseWindowsOpenSshPipe = config.GetBool(useWindowsOpenSshPipeName, false);
+      Options.UseWindowsOpenSshAllowedUsers =
+        config.GetBool(useWindowsOpenSshAllowedUsersOptionName, false);
+      Options.WindowsOpenSshAllowedUsers =
+        config.GetString(windowsOpenSshAllowedUsersOptionName) ?? string.Empty;
       Options.UnixSocketPath = config.GetString(unixSocketPathOptionName);
       Options.UserPicksKeyOnRequestIdentities =
         config.GetBool(userPicksKeyOnRequestIdentitiesOptionName, false);

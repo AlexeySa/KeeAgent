@@ -320,6 +320,15 @@ namespace KeeAgent {
                 return ResourceManager.GetString("OptionUseWindowsOpenSshPipe", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Allow configured users and groups to access Windows OpenSSH agent.
+        /// </summary>
+        internal static string OptionUseWindowsOpenSshAllowedUsers {
+            get {
+                return ResourceManager.GetString("OptionUseWindowsOpenSshAllowedUsers", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to KeeAgent is Locked.

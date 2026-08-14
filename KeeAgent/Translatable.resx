@@ -224,4 +224,7 @@
   <data name="OptionUseWindowsOpenSshPipe" xml:space="preserve">
     <value>Enable agent for Windows OpenSSH</value>
   </data>
+  <data name="OptionUseWindowsOpenSshAllowedUsers" xml:space="preserve">
+    <value>Allow configured users and groups to access Windows OpenSSH agent</value>
+  </data>
 </root>

@@ -96,6 +96,18 @@ namespace KeeAgent
     public bool UseWindowsOpenSshPipe { get; set; }
 
     /// <summary>
+    /// When true, the identities in <see cref="WindowsOpenSshAllowedUsers"/>
+    /// are allowed to access the Windows OpenSSH agent pipe.
+    /// </summary>
+    public bool UseWindowsOpenSshAllowedUsers { get; set; }
+
+    /// <summary>
+    /// Additional Windows users and groups allowed to access the Windows
+    /// OpenSSH agent pipe, separated by semicolons.
+    /// </summary>
+    public string WindowsOpenSshAllowedUsers { get; set; }
+
+    /// <summary>
     /// The path for creating a unix socket in Agent mode on unix-like platforms
     /// </summary>
     /// <value>The unix socket path.</value>

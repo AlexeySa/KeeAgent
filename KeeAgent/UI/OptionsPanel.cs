@@ -2,6 +2,7 @@
 // Copyright (c) 2012-2017,2022 David Lechner <david@lechnology.com>
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
@@ -26,8 +27,8 @@ namespace KeeAgent.UI
         const int yOffset = -30;
         helpButton.Left += xOffset;
         customListViewEx.Width += xOffset;
-        groupBox1.Width += xOffset;
-        groupBox1.Height += yOffset;
+        socketPanel.Width += xOffset;
+        socketPanel.Height += yOffset;
       }
 
       this.ext = ext;
@@ -83,12 +84,17 @@ namespace KeeAgent.UI
           agentModeOptionsGroup, Translatable.OptionInheritSocketFilePermissions);
         optionsList.CreateItem(ext.Options, "UseWindowsOpenSshPipe",
           agentModeOptionsGroup, Translatable.OptionUseWindowsOpenSshPipe);
+        optionsList.CreateItem(ext.Options, "UseWindowsOpenSshAllowedUsers",
+          agentModeOptionsGroup, Translatable.OptionUseWindowsOpenSshAllowedUsers);
       }
 
       columnHeader.Width = customListViewEx.ClientRectangle.Width -
         UIUtil.GetVScrollBarWidth() - 1;
       if (isUnix) {
-        groupBox1.Text = "Agent mode socket file";
+        windowsOpenSshAllowedUsersLabel.Visible = false;
+        windowsOpenSshAllowedUsersTextBox.Visible = false;
+        customListViewEx.Height = socketPanel.Top + cygwinPathBrowseButton.Top
+          - customListViewEx.Top - customListViewEx.Margin.Bottom;
         useCygwinSocketCheckBox.Visible = false;
         cygwinSocketPathTextBox.Text = ext.Options.UnixSocketPath;
         cygwinSocketPathTextBox.Enabled = true;
@@ -103,6 +109,9 @@ namespace KeeAgent.UI
         wslSocketPathBrowseButton.Visible = false;
       }
       else {
+        windowsOpenSshAllowedUsersTextBox.Text =
+          KeeAgentExt.NormalizeWindowsIdentityNames(
+            ext.Options.WindowsOpenSshAllowedUsers);
         useCygwinSocketCheckBox.Checked = ext.Options.UseCygwinSocket;
         cygwinSocketPathTextBox.Text = ext.Options.CygwinSocketPath;
         useMsysSocketCheckBox.Checked = ext.Options.UseMsysSocket;
@@ -136,6 +145,19 @@ namespace KeeAgent.UI
               MessageService.ShowWarning("Must specify path for WSL socket file.");
               e2.Cancel = true;
               return;
+            }
+            if (!isUnix) {
+              List<string> unresolvedIdentityNames;
+              KeeAgentExt.ResolveWindowsIdentityNames(
+                windowsOpenSshAllowedUsersTextBox.Text,
+                out unresolvedIdentityNames);
+              if (unresolvedIdentityNames.Count > 0) {
+                MessageService.ShowWarning(
+                  "The following Windows OpenSSH access entries could not be resolved:",
+                  string.Join(Environment.NewLine, unresolvedIdentityNames));
+                e2.Cancel = true;
+                return;
+              }
             }
             if (isUnix && modeComboBox.Text != Translatable.OptionAgentModeClient
               && string.IsNullOrWhiteSpace(cygwinSocketPathTextBox.Text)) {
@@ -193,6 +215,9 @@ namespace KeeAgent.UI
         ext.Options.UnixSocketPath = cygwinSocketPathTextBox.Text;
       }
       else {
+        ext.Options.WindowsOpenSshAllowedUsers =
+          KeeAgentExt.NormalizeWindowsIdentityNames(
+            windowsOpenSshAllowedUsersTextBox.Text);
         ext.Options.UseCygwinSocket = useCygwinSocketCheckBox.Checked;
         ext.Options.CygwinSocketPath = cygwinSocketPathTextBox.Text;
         ext.Options.UseMsysSocket = useMsysSocketCheckBox.Checked;

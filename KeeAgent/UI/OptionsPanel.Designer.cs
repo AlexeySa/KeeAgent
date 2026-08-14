@@ -33,7 +33,9 @@
             this.modeComboBox = new System.Windows.Forms.ComboBox();
             this.modeLabel = new System.Windows.Forms.Label();
             this.helpButton = new System.Windows.Forms.Button();
-            this.groupBox1 = new System.Windows.Forms.GroupBox();
+            this.windowsOpenSshAllowedUsersLabel = new System.Windows.Forms.Label();
+            this.windowsOpenSshAllowedUsersTextBox = new System.Windows.Forms.TextBox();
+            this.socketPanel = new System.Windows.Forms.Panel();
             this.msysPathBrowseButton = new System.Windows.Forms.Button();
             this.wslSocketPathBrowseButton = new System.Windows.Forms.Button();
             this.cygwinPathBrowseButton = new System.Windows.Forms.Button();
@@ -47,7 +49,7 @@
             this.label3 = new System.Windows.Forms.Label();
             this.useCygwinSocketCheckBox = new System.Windows.Forms.CheckBox();
             this.label1 = new System.Windows.Forms.Label();
-            this.groupBox1.SuspendLayout();
+            this.socketPanel.SuspendLayout();
             this.SuspendLayout();
             // 
             // customListViewEx
@@ -88,24 +90,34 @@
             this.helpButton.UseVisualStyleBackColor = true;
             this.helpButton.Click += new System.EventHandler(this.helpButton_Click);
             // 
-            // groupBox1
+            // windowsOpenSshAllowedUsersLabel
             // 
-            resources.ApplyResources(this.groupBox1, "groupBox1");
-            this.groupBox1.Controls.Add(this.msysPathBrowseButton);
-            this.groupBox1.Controls.Add(this.wslSocketPathBrowseButton);
-            this.groupBox1.Controls.Add(this.cygwinPathBrowseButton);
-            this.groupBox1.Controls.Add(this.msysSocketPathTextBox);
-            this.groupBox1.Controls.Add(this.msysSocketPathLabel);
-            this.groupBox1.Controls.Add(this.wslSocketPathTextBox);
-            this.groupBox1.Controls.Add(this.cygwinSocketPathTextBox);
-            this.groupBox1.Controls.Add(this.wslSocketPathLabel);
-            this.groupBox1.Controls.Add(this.useMsysSocketCheckBox);
-            this.groupBox1.Controls.Add(this.useWslSocketCheckBox);
-            this.groupBox1.Controls.Add(this.label3);
-            this.groupBox1.Controls.Add(this.useCygwinSocketCheckBox);
-            this.groupBox1.Controls.Add(this.label1);
-            this.groupBox1.Name = "groupBox1";
-            this.groupBox1.TabStop = false;
+            resources.ApplyResources(this.windowsOpenSshAllowedUsersLabel, "windowsOpenSshAllowedUsersLabel");
+            this.windowsOpenSshAllowedUsersLabel.Name = "windowsOpenSshAllowedUsersLabel";
+            // 
+            // windowsOpenSshAllowedUsersTextBox
+            // 
+            resources.ApplyResources(this.windowsOpenSshAllowedUsersTextBox, "windowsOpenSshAllowedUsersTextBox");
+            this.windowsOpenSshAllowedUsersTextBox.Name = "windowsOpenSshAllowedUsersTextBox";
+            // 
+            // socketPanel
+            // 
+            resources.ApplyResources(this.socketPanel, "socketPanel");
+            this.socketPanel.BackColor = System.Drawing.Color.Transparent;
+            this.socketPanel.Controls.Add(this.msysPathBrowseButton);
+            this.socketPanel.Controls.Add(this.wslSocketPathBrowseButton);
+            this.socketPanel.Controls.Add(this.cygwinPathBrowseButton);
+            this.socketPanel.Controls.Add(this.msysSocketPathTextBox);
+            this.socketPanel.Controls.Add(this.msysSocketPathLabel);
+            this.socketPanel.Controls.Add(this.wslSocketPathTextBox);
+            this.socketPanel.Controls.Add(this.cygwinSocketPathTextBox);
+            this.socketPanel.Controls.Add(this.wslSocketPathLabel);
+            this.socketPanel.Controls.Add(this.useMsysSocketCheckBox);
+            this.socketPanel.Controls.Add(this.useWslSocketCheckBox);
+            this.socketPanel.Controls.Add(this.label3);
+            this.socketPanel.Controls.Add(this.useCygwinSocketCheckBox);
+            this.socketPanel.Controls.Add(this.label1);
+            this.socketPanel.Name = "socketPanel";
             // 
             // msysPathBrowseButton
             // 
@@ -188,14 +200,16 @@
             // 
             resources.ApplyResources(this, "$this");
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.Controls.Add(this.groupBox1);
+            this.Controls.Add(this.socketPanel);
+            this.Controls.Add(this.windowsOpenSshAllowedUsersTextBox);
+            this.Controls.Add(this.windowsOpenSshAllowedUsersLabel);
             this.Controls.Add(this.helpButton);
             this.Controls.Add(this.modeLabel);
             this.Controls.Add(this.modeComboBox);
             this.Controls.Add(this.customListViewEx);
             this.Name = "OptionsPanel";
-            this.groupBox1.ResumeLayout(false);
-            this.groupBox1.PerformLayout();
+            this.socketPanel.ResumeLayout(false);
+            this.socketPanel.PerformLayout();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -208,7 +222,9 @@
         private System.Windows.Forms.ComboBox modeComboBox;
         private System.Windows.Forms.Label modeLabel;
         private System.Windows.Forms.Button helpButton;
-        private System.Windows.Forms.GroupBox groupBox1;
+        private System.Windows.Forms.Label windowsOpenSshAllowedUsersLabel;
+        private System.Windows.Forms.TextBox windowsOpenSshAllowedUsersTextBox;
+        private System.Windows.Forms.Panel socketPanel;
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.TextBox msysSocketPathTextBox;
         private System.Windows.Forms.Label msysSocketPathLabel;

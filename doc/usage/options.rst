@@ -84,6 +84,17 @@ tab.
         Enable an SSH agent socket compatible with the built-in Windows 10 SSH
         client.
 
+    -   **Allow configured users and groups to access Windows OpenSSH agent**:
+        (default: disabled) Adds the Windows users and groups entered in the
+        field below to the named pipe access control list. Separate local or
+        domain accounts with semicolons. The account running KeePass always
+        retains access. The list is saved even while this option is disabled,
+        and an empty list grants no additional access.
+
+        If an account is deleted or temporarily unavailable when KeeAgent
+        starts, it is ignored with a warning while the remaining valid accounts
+        are still applied.
+
 **Cygwin/MSYS/WSL Integration** (Windows only, no effect in *Client* mode)
 
     -   **Inherit Cygwin/MSYS/WSL socket file permissions from parent
