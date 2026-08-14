@@ -257,6 +257,15 @@ namespace KeeAgent {
                 return ResourceManager.GetString("OptionIgnoreMissingExternalKeyFiles", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Inherit Cygwin/MSYS/WSL socket file permissions from parent directory.
+        /// </summary>
+        internal static string OptionInheritSocketFilePermissions {
+            get {
+                return ResourceManager.GetString("OptionInheritSocketFilePermissions", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Enable debug logging.

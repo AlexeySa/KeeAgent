@@ -79,6 +79,8 @@ namespace KeeAgent.UI
       optionsList.CreateItem(ext.Options, "UserPicksKeyOnRequestIdentities",
         agentModeOptionsGroup, Translatable.OptionUserPicksKeyOnRequestIdentities);
       if (!isUnix) {
+        optionsList.CreateItem(ext.Options, "InheritSocketFilePermissions",
+          agentModeOptionsGroup, Translatable.OptionInheritSocketFilePermissions);
         optionsList.CreateItem(ext.Options, "UseWindowsOpenSshPipe",
           agentModeOptionsGroup, Translatable.OptionUseWindowsOpenSshPipe);
       }

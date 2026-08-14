@@ -212,6 +212,9 @@
   <data name="OptionDisableKeyDecryptionProgressBar" xml:space="preserve">
     <value>Disable SSH key decryption progress bar</value>
   </data>
+  <data name="OptionInheritSocketFilePermissions" xml:space="preserve">
+    <value>Inherit Cygwin/MSYS/WSL socket file permissions from parent directory</value>
+  </data>
   <data name="LoadKeyOpenUrlContextMenuItem" xml:space="preserve">
     <value>Load SS&amp;H Key and Open URL</value>
   </data>

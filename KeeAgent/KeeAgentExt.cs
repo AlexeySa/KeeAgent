@@ -58,6 +58,8 @@ namespace KeeAgent
     const string msysSocketPathOptionName = pluginNamespace + ".MsysSocketPath";
     const string useWslSocketOptionName = pluginNamespace + ".UseWslSocket";
     const string wslSocketPathOptionName = pluginNamespace + ".WslSocketPath";
+    const string inheritSocketFilePermissionsOptionName =
+      pluginNamespace + ".InheritSocketFilePermissions";
     const string useWindowsOpenSshPipeName = pluginNamespace + ".UseWindowsOpenSshPipe";
     const string unixSocketPathOptionName = pluginNamespace + ".UnixSocketPath";
     const string userPicksKeyOnRequestIdentitiesOptionName =
@@ -359,8 +361,9 @@ namespace KeeAgent
         return;
       try {
         pagent.StopCygwinSocket();
-        pagent.StartCygwinSocket(Environment.ExpandEnvironmentVariables(
-          Options.CygwinSocketPath));
+        pagent.StartCygwinSocket(
+          Environment.ExpandEnvironmentVariables(Options.CygwinSocketPath),
+          Options.InheritSocketFilePermissions);
       }
       catch (Exception ex) {
         MessageService.ShowWarning("Failed to start Cygwin socket:",
@@ -384,8 +387,9 @@ namespace KeeAgent
         return;
       try {
         pagent.StopMsysSocket();
-        pagent.StartMsysSocket(Environment.ExpandEnvironmentVariables(
-          Options.MsysSocketPath));
+        pagent.StartMsysSocket(
+          Environment.ExpandEnvironmentVariables(Options.MsysSocketPath),
+          Options.InheritSocketFilePermissions);
       }
       catch (Exception ex) {
         MessageService.ShowWarning("Failed to start MSYS socket:",
@@ -410,8 +414,9 @@ namespace KeeAgent
       try {
         pagent.StopWslSocket();
         try {
-          pagent.StartWslSocket(Environment.ExpandEnvironmentVariables(
-            Options.WslSocketPath));
+          pagent.StartWslSocket(
+            Environment.ExpandEnvironmentVariables(Options.WslSocketPath),
+            Options.InheritSocketFilePermissions);
         }
         catch (SocketException ex) {
           if (ex.SocketErrorCode != SocketError.AddressFamilyNotSupported) {
@@ -643,6 +648,8 @@ namespace KeeAgent
       config.SetString(msysSocketPathOptionName, Options.MsysSocketPath);
       config.SetBool(useWslSocketOptionName, Options.UseWslSocket);
       config.SetString(wslSocketPathOptionName, Options.WslSocketPath);
+      config.SetBool(inheritSocketFilePermissionsOptionName,
+        Options.InheritSocketFilePermissions);
       config.SetBool(useWindowsOpenSshPipeName, Options.UseWindowsOpenSshPipe);
       config.SetString(unixSocketPathOptionName, Options.UnixSocketPath);
       config.SetBool(userPicksKeyOnRequestIdentitiesOptionName,
@@ -666,6 +673,8 @@ namespace KeeAgent
       Options.MsysSocketPath = config.GetString(msysSocketPathOptionName);
       Options.UseWslSocket = config.GetBool(useWslSocketOptionName, false);
       Options.WslSocketPath = config.GetString(wslSocketPathOptionName);
+      Options.InheritSocketFilePermissions =
+        config.GetBool(inheritSocketFilePermissionsOptionName, false);
       Options.UseWindowsOpenSshPipe = config.GetBool(useWindowsOpenSshPipeName, false);
       Options.UnixSocketPath = config.GetString(unixSocketPathOptionName);
       Options.UserPicksKeyOnRequestIdentities =

@@ -84,6 +84,12 @@ namespace KeeAgent
     public string WslSocketPath { get; set; }
 
     /// <summary>
+    /// When true, Cygwin, MSYS and WSL socket files keep the permissions
+    /// inherited from their parent directories.
+    /// </summary>
+    public bool InheritSocketFilePermissions { get; set; }
+
+    /// <summary>
     /// When <c>true</c> and using PageantAgent, a named pipe will be created
     /// at //./pipe/openssh-ssh-agent that can be used with Windows OpenSSH
     /// </summary>

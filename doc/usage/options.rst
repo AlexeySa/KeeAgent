@@ -86,6 +86,11 @@ tab.
 
 **Cygwin/MSYS/WSL Integration** (Windows only, no effect in *Client* mode)
 
+    -   **Inherit Cygwin/MSYS/WSL socket file permissions from parent
+        directory**: (default: disabled) Keeps the access permissions inherited
+        from the directory containing each socket file. When disabled, KeeAgent
+        restricts each socket file to the current user.
+
     -   **Create Cygwin compatible socket file (may work with some versions of
         MSYS)**: (default: disabled) Creates a file that can be used by Cygwin
         programs to access KeeAgent.
