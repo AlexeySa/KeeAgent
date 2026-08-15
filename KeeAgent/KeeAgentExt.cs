@@ -16,6 +16,7 @@ using System.Windows.Forms;
 
 using dlech.SshAgentLib;
 using dlech.SshAgentLib.WinForms;
+using SshAgentLib.Connection;
 using KeeAgent.Properties;
 using KeeAgent.UI;
 using KeePass.App;
@@ -128,10 +129,10 @@ namespace KeeAgent
               // IMPORTANT: if you change either of these callbacks, you need
               // to make sure that they do not block the main event loop.
               if (Type.GetType("Mono.Runtime") == null) {
-                pagent.FilterKeyListCallback = FilterKeyList;
+                pagent.FilterKeyListWithContextCallback = FilterKeyList;
                 pagent.ConfirmUserPermissionCallback = ConfirmUserPermissionCallback;
               } else {
-                pagent.FilterKeyListCallback = FilterKeyListMono;
+                pagent.FilterKeyListWithContextCallback = FilterKeyListMono;
                 pagent.ConfirmUserPermissionCallback = Default.ConfirmCallback;
               }
               agent = pagent;
@@ -167,10 +168,10 @@ namespace KeeAgent
               // IMPORTANT: if you change either of these callbacks, you need
               // to make sure that they do not block the main event loop.
               if (Type.GetType("Mono.Runtime") == null) {
-                unixAgent.FilterKeyListCallback = FilterKeyList;
+                unixAgent.FilterKeyListWithContextCallback = FilterKeyList;
                 unixAgent.ConfirmUserPermissionCallback = ConfirmUserPermissionCallback;
               } else {
-                unixAgent.FilterKeyListCallback = FilterKeyListMono;
+                unixAgent.FilterKeyListWithContextCallback = FilterKeyListMono;
                 unixAgent.ConfirmUserPermissionCallback = Default.ConfirmCallback;
               }
               agent = unixAgent;
@@ -1334,14 +1335,16 @@ namespace KeeAgent
       }
     }
 
-    IEnumerable<ISshKey> FilterKeyList(IEnumerable<ISshKey> list)
+    IEnumerable<ISshKey> FilterKeyList(
+      IEnumerable<ISshKey> list,
+      ConnectionContext context)
     {
       if (!Options.UserPicksKeyOnRequestIdentities || !list.Any()) {
         return list;
       }
 
       _uiThread.Invoke(() => {
-        var dialog = new KeyPicker(list);
+        var dialog = new KeyPicker(list, context);
         dialog.Shown += (sender, e) => dialog.Activate();
         dialog.StartPosition = FormStartPosition.CenterScreen;
         dialog.TopMost = true;
@@ -1359,7 +1362,9 @@ namespace KeeAgent
     }
 
     // same as above, but without the background UI thread
-    IEnumerable<ISshKey> FilterKeyListMono(IEnumerable<ISshKey> list)
+    IEnumerable<ISshKey> FilterKeyListMono(
+      IEnumerable<ISshKey> list,
+      ConnectionContext context)
     {
       if (!Options.UserPicksKeyOnRequestIdentities || !list.Any()) {
         return list;
@@ -1367,7 +1372,7 @@ namespace KeeAgent
 
       // TODO: Using the main thread here will cause a lockup with IOProtocolExt
       pluginHost.MainWindow.Invoke((MethodInvoker)delegate {
-        var dialog = new KeyPicker(list);
+        var dialog = new KeyPicker(list, context);
         dialog.Shown += (sender, e) => dialog.Activate();
         dialog.TopMost = true;
         dialog.ShowDialog(pluginHost.MainWindow);
