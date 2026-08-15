@@ -153,7 +153,7 @@ namespace KeeAgent.UI
                 out unresolvedIdentityNames);
               if (unresolvedIdentityNames.Count > 0) {
                 MessageService.ShowWarning(
-                  "The following Windows OpenSSH access entries could not be resolved:",
+                  "The following Windows agent access entries could not be resolved:",
                   string.Join(Environment.NewLine, unresolvedIdentityNames));
                 e2.Cancel = true;
                 return;
@@ -184,11 +184,8 @@ namespace KeeAgent.UI
             else {
               ext.StopWslSocket();
             }
-            if (ext.Options.UseWindowsOpenSshPipe) {
-              ext.StartWindowsOpenSshPipe();
-            }
-            else {
-              ext.StopWindowsOpenSsh();
+            if (!isUnix) {
+              ext.ApplyWindowsAgentAccess();
             }
             if (isUnix) {
               ext.StartUnixSocket();

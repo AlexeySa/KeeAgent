@@ -250,7 +250,7 @@
     <value>21</value>
   </data>
   <data name="windowsOpenSshAllowedUsersLabel.Text" xml:space="preserve">
-    <value>OpenSSH users/groups (;):</value>
+    <value>Windows users/groups (;):</value>
   </data>
   <data name="&gt;&gt;windowsOpenSshAllowedUsersLabel.Name" xml:space="preserve">
     <value>windowsOpenSshAllowedUsersLabel</value>

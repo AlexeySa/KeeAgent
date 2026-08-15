@@ -322,7 +322,7 @@ namespace KeeAgent {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Allow configured users and groups to access Windows OpenSSH agent.
+        ///   Looks up a localized string similar to Allow configured Windows identities to access agents.
         /// </summary>
         internal static string OptionUseWindowsOpenSshAllowedUsers {
             get {

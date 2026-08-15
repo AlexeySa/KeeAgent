@@ -10,7 +10,9 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -33,6 +35,30 @@ namespace KeeAgent
 {
   public sealed partial class KeeAgentExt : Plugin
   {
+    enum SidNameUse
+    {
+      User = 1,
+      Group,
+      Domain,
+      Alias,
+      WellKnownGroup,
+      DeletedAccount,
+      Invalid,
+      Unknown,
+      Computer,
+      Label,
+    }
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool LookupAccountSid(
+      string systemName,
+      byte[] sid,
+      StringBuilder name,
+      ref uint nameLength,
+      StringBuilder referencedDomainName,
+      ref uint referencedDomainNameLength,
+      out SidNameUse accountType);
+
     internal IPluginHost pluginHost;
     internal bool debug;
     internal IAgent agent;
@@ -120,7 +146,10 @@ namespace KeeAgent
             // In windows, try to start an agent. If Pageant is running, we will
             // get an exception.
             try {
-              var pagent = new PageantAgent();
+              var allowedIdentitySids =
+                GetConfiguredWindowsAgentAllowedIdentitySids();
+              var pagent = new PageantAgent(
+                GetConfiguredPageantAllowedUserSids(allowedIdentitySids));
               pagent.Locked += PageantAgent_Locked;
               pagent.KeyUsed += PageantAgent_KeyUsed;
               pagent.KeyAdded += PageantAgent_KeyAdded;
@@ -146,7 +175,7 @@ namespace KeeAgent
                 StartWslSocket();
               }
               if (Options.UseWindowsOpenSshPipe) {
-                StartWindowsOpenSshPipe();
+                StartWindowsOpenSshPipe(allowedIdentitySids);
               }
             }
             catch (PageantRunningException) {
@@ -448,22 +477,17 @@ namespace KeeAgent
 
     public void StartWindowsOpenSshPipe()
     {
+      StartWindowsOpenSshPipe(GetConfiguredWindowsAgentAllowedIdentitySids());
+    }
+
+    private void StartWindowsOpenSshPipe(
+      IEnumerable<SecurityIdentifier> allowedIdentitySids)
+    {
       var pagent = agent as PageantAgent;
       if (pagent == null)
         return;
       try {
         pagent.StopWindowsOpenSshPipe();
-        var allowedIdentitySids = new List<SecurityIdentifier>();
-        if (Options.UseWindowsOpenSshAllowedUsers) {
-          List<string> unresolvedIdentityNames;
-          allowedIdentitySids = ResolveWindowsIdentityNames(
-            Options.WindowsOpenSshAllowedUsers, out unresolvedIdentityNames);
-          if (unresolvedIdentityNames.Count > 0) {
-            MessageService.ShowWarning(
-              "Some Windows OpenSSH access entries could not be resolved and were ignored:",
-              string.Join(Environment.NewLine, unresolvedIdentityNames));
-          }
-        }
         pagent.StartWindowsOpenSshPipe(allowedIdentitySids);
       }
       catch (PageantRunningException) {
@@ -474,6 +498,24 @@ namespace KeeAgent
         MessageService.ShowWarning("Failed to start Windows OpenSSH agent:",
           ex.Message);
         // TODO: show better explanation of common errors.
+      }
+    }
+
+    public void ApplyWindowsAgentAccess()
+    {
+      var pagent = agent as PageantAgent;
+      if (pagent == null)
+        return;
+
+      var allowedIdentitySids = GetConfiguredWindowsAgentAllowedIdentitySids();
+      pagent.SetPageantAllowedUserSids(
+        GetConfiguredPageantAllowedUserSids(allowedIdentitySids));
+
+      if (Options.UseWindowsOpenSshPipe) {
+        StartWindowsOpenSshPipe(allowedIdentitySids);
+      }
+      else {
+        StopWindowsOpenSsh();
       }
     }
 
@@ -516,6 +558,62 @@ namespace KeeAgent
       }
 
       return resolvedSids;
+    }
+
+    private List<SecurityIdentifier> GetConfiguredWindowsAgentAllowedIdentitySids()
+    {
+      var allowedIdentitySids = new List<SecurityIdentifier>();
+      if (!Options.UseWindowsOpenSshAllowedUsers) {
+        return allowedIdentitySids;
+      }
+
+      List<string> unresolvedIdentityNames;
+      allowedIdentitySids = ResolveWindowsIdentityNames(
+        Options.WindowsOpenSshAllowedUsers, out unresolvedIdentityNames);
+      if (unresolvedIdentityNames.Count > 0) {
+        MessageService.ShowWarning(
+          "Some Windows agent access entries could not be resolved and were ignored:",
+          string.Join(Environment.NewLine, unresolvedIdentityNames));
+      }
+
+      return allowedIdentitySids;
+    }
+
+    private static List<SecurityIdentifier> GetConfiguredPageantAllowedUserSids(
+      IEnumerable<SecurityIdentifier> allowedIdentitySids)
+    {
+      var allowedUserSids = new List<SecurityIdentifier>();
+      foreach (var sid in allowedIdentitySids) {
+        if (IsWindowsUserSid(sid)) {
+          allowedUserSids.Add(sid);
+        }
+      }
+
+      return allowedUserSids;
+    }
+
+    private static bool IsWindowsUserSid(SecurityIdentifier sid)
+    {
+      var sidBytes = new byte[sid.BinaryLength];
+      sid.GetBinaryForm(sidBytes, 0);
+
+      uint nameLength = 0;
+      uint domainNameLength = 0;
+      SidNameUse accountType;
+      LookupAccountSid(null, sidBytes, null, ref nameLength, null,
+        ref domainNameLength, out accountType);
+      if (nameLength == 0) {
+        return false;
+      }
+
+      var name = new StringBuilder((int)nameLength);
+      var domainName = new StringBuilder((int)domainNameLength);
+      if (!LookupAccountSid(null, sidBytes, name, ref nameLength, domainName,
+        ref domainNameLength, out accountType)) {
+        return false;
+      }
+
+      return accountType == SidNameUse.User;
     }
 
     private static List<string> ParseWindowsIdentityNames(string identityNames)

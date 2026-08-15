@@ -225,6 +225,6 @@
     <value>Enable agent for Windows OpenSSH</value>
   </data>
   <data name="OptionUseWindowsOpenSshAllowedUsers" xml:space="preserve">
-    <value>Allow configured users and groups to access Windows OpenSSH agent</value>
+    <value>Allow configured Windows identities to access agents</value>
   </data>
 </root>

@@ -97,13 +97,14 @@ namespace KeeAgent
 
     /// <summary>
     /// When true, the identities in <see cref="WindowsOpenSshAllowedUsers"/>
-    /// are allowed to access the Windows OpenSSH agent pipe.
+    /// are allowed to access Windows agents. Users apply to Pageant and the
+    /// Windows OpenSSH agent pipe; groups apply only to the pipe.
     /// </summary>
     public bool UseWindowsOpenSshAllowedUsers { get; set; }
 
     /// <summary>
-    /// Additional Windows users and groups allowed to access the Windows
-    /// OpenSSH agent pipe, separated by semicolons.
+    /// Additional Windows users and groups allowed to access Windows agents,
+    /// separated by semicolons.
     /// </summary>
     public string WindowsOpenSshAllowedUsers { get; set; }
 
