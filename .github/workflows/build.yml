@@ -14,7 +14,7 @@ jobs:
 
     - name: Install prerequisites
       run: |
-        choco install keepass.install --version=2.50
+        choco install keepass.install --version=2.61.1
         New-Item -ItemType Directory -Force .\KeePass | Out-Null
         $keePassExe = Join-Path $env:ProgramW6432 'KeePass Password Safe 2\KeePass.exe'
         Copy-Item $keePassExe .\KeePass\KeePass.exe
