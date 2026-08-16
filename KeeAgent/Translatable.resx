@@ -224,6 +224,9 @@
   <data name="OptionUseWindowsOpenSshPipe" xml:space="preserve">
     <value>Enable agent for Windows OpenSSH</value>
   </data>
+  <data name="OptionUsePerEntryWindowsOpenSshPipes" xml:space="preserve">
+    <value>Enable per-entry Windows OpenSSH pipes (KeeAgentPipe)</value>
+  </data>
   <data name="OptionUseWindowsOpenSshAllowedUsers" xml:space="preserve">
     <value>Allow configured Windows identities to access agents</value>
   </data>

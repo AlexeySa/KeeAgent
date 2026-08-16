@@ -78,13 +78,27 @@ namespace KeeAgent.UI
       else {
         Text += Translatable.TitleSuffixClientMode;
       }
+      keyInfoView.KeyDisplayInfoProvider = mExt.GetKeyDisplayInfo;
       keyInfoView.SetAgent(mExt.agent);
     }
 
     protected override void OnShown(EventArgs e)
     {
+      ScaleToWorkingArea();
       base.OnShown(e);
       keyInfoView.dataGridView.ClearSelection();
+    }
+
+    private void ScaleToWorkingArea()
+    {
+      var workingArea = Screen.FromControl(this).WorkingArea;
+      Size = new Size(
+        Math.Min((int)Math.Round(Width * 1.3), workingArea.Width),
+        Math.Min((int)Math.Round(Height * 1.3), workingArea.Height));
+      Location = new Point(
+        workingArea.Left + (workingArea.Width - Width) / 2,
+        workingArea.Top + (workingArea.Height - Height) / 2);
+      keyInfoView.dataGridView.ScrollBars = ScrollBars.Both;
     }
 
     private void addButtonFromFileMenuItem_Click(object sender, EventArgs e)

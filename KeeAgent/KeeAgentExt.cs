@@ -13,6 +13,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -69,6 +70,14 @@ namespace KeeAgent
     UIHelper uiHelper;
     bool saveBeforeCloseQuestionMessageShown = false;
     Dictionary<string, KeyFileInfo> keyFileMap = new Dictionary<string, KeyFileInfo>();
+    readonly Dictionary<string, LoadedKeyMetadata> loadedKeyMetadata =
+      new Dictionary<string, LoadedKeyMetadata>(StringComparer.Ordinal);
+    readonly HashSet<string> pendingMetadataFingerprints =
+      new HashSet<string>(StringComparer.Ordinal);
+    readonly HashSet<string> runningRestrictedPipeNames =
+      new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    readonly object keyMetadataSyncRoot = new object();
+    readonly object restrictedPipeSyncRoot = new object();
     KeeAgentColumnProvider columnProvider;
     KeeAgentUiThread _uiThread;
 
@@ -89,6 +98,8 @@ namespace KeeAgent
     const string inheritSocketFilePermissionsOptionName =
       pluginNamespace + ".InheritSocketFilePermissions";
     const string useWindowsOpenSshPipeName = pluginNamespace + ".UseWindowsOpenSshPipe";
+    const string usePerEntryWindowsOpenSshPipesOptionName =
+      pluginNamespace + ".UsePerEntryWindowsOpenSshPipes";
     const string useWindowsOpenSshAllowedUsersOptionName =
       pluginNamespace + ".UseWindowsOpenSshAllowedUsers";
     const string windowsOpenSshAllowedUsersOptionName =
@@ -100,6 +111,8 @@ namespace KeeAgent
     const string disableKeyDecryptionProgressBarName = pluginNamespace + ".DisableKeyDecryptionProgressBar";
     const string keyFilePathSprPlaceholder = @"{KEEAGENT:KEYFILEPATH}";
     const string identFileOptSprPlaceholder = @"{KEEAGENT:IDENTFILEOPT}";
+    internal const string KeeAgentPipeFieldName = "KeeAgentPipe";
+    const string restrictedPipePrefix = "keeagent-";
     const string groupMenuItemName = "KeeAgentGroupMenuItem";
     const string entryMenuItemName = "KeeAgentEntryMenuItem";
     const string entryMenuLoadSubmenuItemName = "KeeAgentEntryMenuLoadSubmenuItem";
@@ -115,6 +128,18 @@ namespace KeeAgent
 
       public string Path { get; private set; }
       public bool IsTemporary { get; private set; }
+    }
+
+    sealed class LoadedKeyMetadata
+    {
+      public bool AddAtDatabaseOpen { get; set; }
+      public string PipeAlias { get; set; }
+      public PwUuid SourceEntryUuid { get; set; }
+    }
+
+    sealed class InvalidPipeAliasException : Exception
+    {
+      public InvalidPipeAliasException(string message) : base(message) { }
     }
 
     public Options Options { get; private set; }
@@ -511,12 +536,19 @@ namespace KeeAgent
       pagent.SetPageantAllowedUserSids(
         GetConfiguredPageantAllowedUserSids(allowedIdentitySids));
 
+      lock (restrictedPipeSyncRoot) {
+        pagent.StopRestrictedWindowsOpenSshPipes();
+        runningRestrictedPipeNames.Clear();
+      }
+
       if (Options.UseWindowsOpenSshPipe) {
         StartWindowsOpenSshPipe(allowedIdentitySids);
       }
       else {
         StopWindowsOpenSsh();
       }
+
+      ReconcileRestrictedWindowsOpenSshPipes(allowedIdentitySids);
     }
 
     public void StopWindowsOpenSsh()
@@ -525,6 +557,76 @@ namespace KeeAgent
       if (pagent == null)
         return;
       pagent.StopWindowsOpenSshPipe();
+    }
+
+    private void ReconcileRestrictedWindowsOpenSshPipes()
+    {
+      ReconcileRestrictedWindowsOpenSshPipes(
+        GetConfiguredWindowsAgentAllowedIdentitySids());
+    }
+
+    private void ReconcileRestrictedWindowsOpenSshPipes(
+      IEnumerable<SecurityIdentifier> allowedIdentitySids)
+    {
+      var pagent = agent as PageantAgent;
+      if (pagent == null) {
+        return;
+      }
+
+      lock (restrictedPipeSyncRoot) {
+        ReconcileRestrictedWindowsOpenSshPipesCore(
+          pagent, allowedIdentitySids);
+      }
+    }
+
+    private void ReconcileRestrictedWindowsOpenSshPipesCore(
+      PageantAgent pagent,
+      IEnumerable<SecurityIdentifier> allowedIdentitySids)
+    {
+
+      var desiredAliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+      if (Options.UsePerEntryWindowsOpenSshPipes) {
+        var loadedFingerprints = new HashSet<string>(
+          agent.ListKeys().Select(k => k.GetSha256Fingerprint()),
+          StringComparer.Ordinal);
+        lock (keyMetadataSyncRoot) {
+          foreach (var item in loadedKeyMetadata) {
+            if (loadedFingerprints.Contains(item.Key)
+                && !string.IsNullOrEmpty(item.Value.PipeAlias)) {
+              desiredAliases.Add(item.Value.PipeAlias);
+            }
+          }
+        }
+      }
+
+      foreach (var pipeName in runningRestrictedPipeNames.ToList()) {
+        var alias = pipeName.Substring(restrictedPipePrefix.Length);
+        if (!desiredAliases.Contains(alias)) {
+          pagent.StopWindowsOpenSshPipe(pipeName);
+          runningRestrictedPipeNames.Remove(pipeName);
+        }
+      }
+
+      foreach (var alias in desiredAliases) {
+        var pipeName = restrictedPipePrefix + alias;
+        if (runningRestrictedPipeNames.Contains(pipeName)) {
+          continue;
+        }
+
+        try {
+          var capturedAlias = alias;
+          pagent.StartWindowsOpenSshPipe(
+            pipeName,
+            key => IsKeyMappedToPipe(key, capturedAlias),
+            allowedIdentitySids);
+          runningRestrictedPipeNames.Add(pipeName);
+        }
+        catch (Exception ex) {
+          MessageService.ShowWarning(
+            string.Format("Failed to start Windows OpenSSH pipe '{0}':", pipeName),
+            ex.Message);
+        }
+      }
     }
 
     internal static string NormalizeWindowsIdentityNames(string identityNames)
@@ -819,6 +921,8 @@ namespace KeeAgent
       config.SetBool(inheritSocketFilePermissionsOptionName,
         Options.InheritSocketFilePermissions);
       config.SetBool(useWindowsOpenSshPipeName, Options.UseWindowsOpenSshPipe);
+      config.SetBool(usePerEntryWindowsOpenSshPipesOptionName,
+        Options.UsePerEntryWindowsOpenSshPipes);
       config.SetBool(useWindowsOpenSshAllowedUsersOptionName,
         Options.UseWindowsOpenSshAllowedUsers);
       config.SetString(windowsOpenSshAllowedUsersOptionName,
@@ -848,6 +952,8 @@ namespace KeeAgent
       Options.InheritSocketFilePermissions =
         config.GetBool(inheritSocketFilePermissionsOptionName, false);
       Options.UseWindowsOpenSshPipe = config.GetBool(useWindowsOpenSshPipeName, false);
+      Options.UsePerEntryWindowsOpenSshPipes =
+        config.GetBool(usePerEntryWindowsOpenSshPipesOptionName, false);
       Options.UseWindowsOpenSshAllowedUsers =
         config.GetBool(useWindowsOpenSshAllowedUsersOptionName, false);
       Options.WindowsOpenSshAllowedUsers =
@@ -922,6 +1028,7 @@ namespace KeeAgent
         };
         pwEntryForm.EntrySaving += PwEntryForm_EntrySaving;
         pwEntryForm.FormClosing += PwEntryForm_FormClosing;
+        pwEntryForm.FormClosed += PwEntryForm_FormClosed;
       }
 
       /* Add KeeAgent tab to Database Settings dialog */
@@ -969,6 +1076,11 @@ namespace KeeAgent
 
         if (settings.AllowUseOfSshKey) {
           string errorMessage = null;
+          var pipeAlias = GetPipeAlias(entryForm.EntryRef);
+          if (Environment.OSVersion.Platform == PlatformID.Win32NT
+              && !string.IsNullOrEmpty(pipeAlias) && !IsValidPipeAlias(pipeAlias)) {
+            errorMessage = "KeeAgentPipe must be 1-64 ASCII characters and may contain only letters, digits, '.', '_' and '-'.";
+          }
           switch (settings.Location.SelectedType) {
             case EntrySettings.LocationType.Attachment:
               if (string.IsNullOrWhiteSpace(settings.Location.AttachmentName)) {
@@ -1020,6 +1132,14 @@ namespace KeeAgent
       saveBeforeCloseQuestionMessageShown = false;
     }
 
+    private void PwEntryForm_FormClosed(object sender, FormClosedEventArgs e)
+    {
+      var entryForm = sender as PwEntryForm;
+      if (entryForm != null && entryForm.DialogResult == DialogResult.OK) {
+        RefreshLoadedEntryMetadata(entryForm.EntryRef);
+      }
+    }
+
     private void OptionsForm_FormClosed(object sender, FormClosedEventArgs e)
     {
       var optionsForm = sender as OptionsForm;
@@ -1055,6 +1175,13 @@ namespace KeeAgent
 
     private void PageantAgent_KeyAdded(object sender, SshKeyEventArgs e)
     {
+      var fingerprint = e.Key.GetSha256Fingerprint();
+      lock (keyMetadataSyncRoot) {
+        if (!pendingMetadataFingerprints.Contains(fingerprint)) {
+          loadedKeyMetadata.Remove(fingerprint);
+        }
+      }
+      ReconcileRestrictedWindowsOpenSshPipes();
       if (Options.AlwaysConfirm && !e.Key.HasConstraint(
             Agent.KeyConstraintType.SSH_AGENT_CONSTRAIN_CONFIRM)) {
         var constraint = new Agent.KeyConstraint();
@@ -1065,7 +1192,7 @@ namespace KeeAgent
 
     private void PageantAgent_KeyRemoved(object sender, SshKeyEventArgs e)
     {
-      RemoveKey(e.Key);
+      CleanupRemovedKey(e.Key);
     }
 
     private readonly object unlockOnActivitySyncRoot = new object(); // used in PageantAgent_MessageReceived as a sync root
@@ -1376,8 +1503,15 @@ namespace KeeAgent
                             ICollection<Agent.KeyConstraint> constraints)
     {
       var settings = entry.GetKeeAgentSettings();
+      var configuredPipeAlias = GetPipeAlias(entry);
 
       try {
+        if (Environment.OSVersion.Platform == PlatformID.Win32NT
+            && !string.IsNullOrEmpty(configuredPipeAlias)
+            && !IsValidPipeAlias(configuredPipeAlias)) {
+          throw new InvalidPipeAliasException(
+            "KeeAgentPipe must be 1-64 ASCII characters and may contain only letters, digits, '.', '_' and '-'.");
+        }
         var key = entry.GetSshKey(this.Options.DisableKeyDecryptionProgressBar);
         string db_name = "<Unknown database>";
 
@@ -1427,7 +1561,37 @@ namespace KeeAgent
           }
         }
 
-        agent.AddKey(key);
+        var fingerprint = key.GetSha256Fingerprint();
+        var metadata = CreateLoadedKeyMetadata(entry, settings);
+        LoadedKeyMetadata previousMetadata = null;
+        lock (keyMetadataSyncRoot) {
+          loadedKeyMetadata.TryGetValue(fingerprint, out previousMetadata);
+          loadedKeyMetadata[fingerprint] = metadata;
+          pendingMetadataFingerprints.Add(fingerprint);
+        }
+
+        try {
+          agent.AddKey(key);
+        }
+        catch {
+          lock (keyMetadataSyncRoot) {
+            pendingMetadataFingerprints.Remove(fingerprint);
+            if (previousMetadata == null) {
+              loadedKeyMetadata.Remove(fingerprint);
+            }
+            else {
+              loadedKeyMetadata[fingerprint] = previousMetadata;
+            }
+          }
+          throw;
+        }
+        finally {
+          lock (keyMetadataSyncRoot) {
+            pendingMetadataFingerprints.Remove(fingerprint);
+          }
+        }
+
+        ReconcileRestrictedWindowsOpenSshPipes();
 
         if (settings.Location.SelectedType == EntrySettings.LocationType.Attachment
           && settings.Location.SaveAttachmentToTempFile) {
@@ -1475,6 +1639,12 @@ namespace KeeAgent
                  });
           }
 
+        }
+        else if (ex is InvalidPipeAliasException) {
+          MessageService.ShowWarning(new string[] {
+            firstLine,
+            ex.Message
+          });
         }
         else if (ex is FormatException) {
           var message = ex.Message;
@@ -1527,11 +1697,121 @@ namespace KeeAgent
       }
     }
 
+    private static LoadedKeyMetadata CreateLoadedKeyMetadata(
+      PwEntry entry,
+      EntrySettings settings)
+    {
+      return new LoadedKeyMetadata {
+        AddAtDatabaseOpen = settings.AddAtDatabaseOpen,
+        PipeAlias = GetPipeAlias(entry),
+        SourceEntryUuid = entry.Uuid,
+      };
+    }
+
+    private static string GetPipeAlias(PwEntry entry)
+    {
+      if (entry == null) {
+        return string.Empty;
+      }
+      return (entry.Strings.ReadSafe(KeeAgentPipeFieldName) ?? string.Empty).Trim();
+    }
+
+    internal static bool IsValidPipeAlias(string alias)
+    {
+      return !string.IsNullOrEmpty(alias)
+        && alias.Length <= 64
+        && Regex.IsMatch(alias, @"^[A-Za-z0-9][A-Za-z0-9._-]*$");
+    }
+
+    private bool IsKeyMappedToPipe(ISshKey key, string alias)
+    {
+      LoadedKeyMetadata metadata;
+      lock (keyMetadataSyncRoot) {
+        return loadedKeyMetadata.TryGetValue(key.GetSha256Fingerprint(), out metadata)
+          && string.Equals(metadata.PipeAlias, alias,
+            StringComparison.OrdinalIgnoreCase);
+      }
+    }
+
+    private void RefreshLoadedEntryMetadata(PwEntry entry)
+    {
+      try {
+        var publicKey = entry.TryGetSshPublicKey();
+        if (publicKey == null) {
+          return;
+        }
+
+        var fingerprint = publicKey.Sha256Fingerprint;
+        if (!agent.ListKeys().Any(k =>
+            string.Equals(k.GetSha256Fingerprint(), fingerprint,
+              StringComparison.Ordinal))) {
+          return;
+        }
+
+        lock (keyMetadataSyncRoot) {
+          LoadedKeyMetadata metadata;
+          if (!loadedKeyMetadata.TryGetValue(fingerprint, out metadata)
+              || !metadata.SourceEntryUuid.Equals(entry.Uuid)) {
+            return;
+          }
+          loadedKeyMetadata[fingerprint] = CreateLoadedKeyMetadata(
+            entry, entry.GetKeeAgentSettings());
+        }
+        ReconcileRestrictedWindowsOpenSshPipes();
+      }
+      catch (Exception ex) {
+        Debug.Fail(ex.ToString());
+      }
+    }
+
+    internal KeyDisplayInfo GetKeyDisplayInfo(ISshKey key)
+    {
+      LoadedKeyMetadata metadata;
+      lock (keyMetadataSyncRoot) {
+        loadedKeyMetadata.TryGetValue(key.GetSha256Fingerprint(), out metadata);
+      }
+
+      if (metadata == null) {
+        return new KeyDisplayInfo { LoadMode = "Manual" };
+      }
+
+      var hasPipe = Environment.OSVersion.Platform == PlatformID.Win32NT
+        && !string.IsNullOrEmpty(metadata.PipeAlias);
+      var isAutomaticPipe = metadata.AddAtDatabaseOpen && hasPipe;
+      var pipeEnabled = Options.UsePerEntryWindowsOpenSshPipes;
+      return new KeyDisplayInfo {
+        LoadMode = isAutomaticPipe
+          ? "Pipe"
+          : metadata.AddAtDatabaseOpen ? "Auto" : "Manual",
+        OpenSshPipe = hasPipe
+          ? metadata.PipeAlias + (pipeEnabled ? string.Empty : " (disabled)")
+          : string.Empty,
+        OpenSshPipeToolTip = hasPipe
+          ? @"\\.\pipe\" + restrictedPipePrefix + metadata.PipeAlias
+          : string.Empty,
+        UseDedicatedTab = isAutomaticPipe,
+        DedicatedTabTitle = pipeEnabled
+          ? "Windows OpenSSH pipes"
+          : "Windows OpenSSH pipes (disabled)",
+      };
+    }
+
     public void RemoveKey(ISshKey key)
     {
       agent.RemoveKey(key);
 
+      CleanupRemovedKey(key);
+    }
+
+    private void CleanupRemovedKey(ISshKey key)
+    {
       var fingerprint = key.GetSha256Fingerprint();
+
+      lock (keyMetadataSyncRoot) {
+        if (!pendingMetadataFingerprints.Contains(fingerprint)) {
+          loadedKeyMetadata.Remove(fingerprint);
+        }
+      }
 
       if (keyFileMap.ContainsKey(fingerprint) && keyFileMap[fingerprint].IsTemporary) {
         try {
@@ -1542,18 +1822,24 @@ namespace KeeAgent
           Debug.Fail(ex.Message, ex.StackTrace);
         }
       }
+
+      ReconcileRestrictedWindowsOpenSshPipes();
     }
 
     IEnumerable<ISshKey> FilterKeyList(
       IEnumerable<ISshKey> list,
       ConnectionContext context)
     {
-      if (!Options.UserPicksKeyOnRequestIdentities || !list.Any()) {
+      list = list.ToList();
+      var restrictedRequest = context != null && context.IsRestrictedEndpoint;
+      if (!list.Any()
+          || (!restrictedRequest && !Options.UserPicksKeyOnRequestIdentities)
+          || (restrictedRequest && list.Count() == 1)) {
         return list;
       }
 
       _uiThread.Invoke(() => {
-        var dialog = new KeyPicker(list, context);
+        var dialog = new KeyPicker(list, context, GetKeyDisplayInfo);
         dialog.Shown += (sender, e) => dialog.Activate();
         dialog.StartPosition = FormStartPosition.CenterScreen;
         dialog.TopMost = true;
@@ -1575,13 +1861,17 @@ namespace KeeAgent
       IEnumerable<ISshKey> list,
       ConnectionContext context)
     {
-      if (!Options.UserPicksKeyOnRequestIdentities || !list.Any()) {
+      list = list.ToList();
+      var restrictedRequest = context != null && context.IsRestrictedEndpoint;
+      if (!list.Any()
+          || (!restrictedRequest && !Options.UserPicksKeyOnRequestIdentities)
+          || (restrictedRequest && list.Count() == 1)) {
         return list;
       }
 
       // TODO: Using the main thread here will cause a lockup with IOProtocolExt
       pluginHost.MainWindow.Invoke((MethodInvoker)delegate {
-        var dialog = new KeyPicker(list, context);
+        var dialog = new KeyPicker(list, context, GetKeyDisplayInfo);
         dialog.Shown += (sender, e) => dialog.Activate();
         dialog.TopMost = true;
         dialog.ShowDialog(pluginHost.MainWindow);

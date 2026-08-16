@@ -84,6 +84,8 @@ namespace KeeAgent.UI
           agentModeOptionsGroup, Translatable.OptionInheritSocketFilePermissions);
         optionsList.CreateItem(ext.Options, "UseWindowsOpenSshPipe",
           agentModeOptionsGroup, Translatable.OptionUseWindowsOpenSshPipe);
+        optionsList.CreateItem(ext.Options, "UsePerEntryWindowsOpenSshPipes",
+          agentModeOptionsGroup, Translatable.OptionUsePerEntryWindowsOpenSshPipes);
         optionsList.CreateItem(ext.Options, "UseWindowsOpenSshAllowedUsers",
           agentModeOptionsGroup, Translatable.OptionUseWindowsOpenSshAllowedUsers);
       }

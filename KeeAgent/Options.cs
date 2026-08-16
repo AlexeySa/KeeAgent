@@ -96,6 +96,12 @@ namespace KeeAgent
     public bool UseWindowsOpenSshPipe { get; set; }
 
     /// <summary>
+    /// When true, entries with a KeeAgentPipe custom field expose their keys
+    /// through dedicated, restricted Windows OpenSSH named pipes.
+    /// </summary>
+    public bool UsePerEntryWindowsOpenSshPipes { get; set; }
+
+    /// <summary>
     /// When true, the identities in <see cref="WindowsOpenSshAllowedUsers"/>
     /// are allowed to access Windows agents. Users apply to Pageant and the
     /// Windows OpenSSH agent pipe; groups apply only to the pipe.
