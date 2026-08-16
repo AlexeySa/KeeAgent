@@ -34,15 +34,17 @@ Changes relative to upstream, starting with commit
 
 - migrated to .NET Framework 4.8;
 - added an option to preserve permissions inherited by Cygwin/MSYS/WSL1 socket
-  files from their parent directories;
+  files from their parent directories on Windows in Agent mode;
 - added configurable access for additional users to Pageant, Windows OpenSSH
   named pipes, and Linux Unix sockets;
-- added the requesting process, user, and endpoint details to the key selection
-  dialog;
+- added available details about the requesting process, user, and endpoint to
+  the key selection dialog;
 - added the `IfDevice` field for loading keys only on selected computers;
 - added restricted per-entry endpoints configured through `KeeAgentPipe`;
 - extended `KeeAgentPipe` from Windows OpenSSH pipes to Linux Unix sockets;
 - improved the load mode and endpoint display in KeeAgent Manager;
+- fixed an error caused by KeePass column autosizing and corrected KeeAgent
+  Manager toolbar icon scaling;
 - added `KeeAgent.plgx` and `KeeAgent.dll` artifacts to GitHub Releases.
 
 ## Requirements
@@ -68,7 +70,8 @@ for details about Windows, Linux, and macOS.
 
 > Do not install the PLGX and DLL variants at the same time.
 
-When upgrading from `v0.13.8-mod.3`, the old
+When upgrading from `v0.13.8-mod`, `v0.13.8-mod.1`, `v0.13.8-mod.2`, or
+`v0.13.8-mod.3`, the old
 `KeeAgent.UsePerEntryWindowsOpenSshPipes` and Windows allowed-user settings are
 not migrated automatically. Re-enable per-entry endpoints and fill in
 **Give users access** if required.
@@ -104,6 +107,9 @@ alias instead of every key loaded in the agent.
 
 An alias must contain 1–64 ASCII characters, start with a letter or digit, and
 may contain letters, digits, `.`, `_`, and `-`.
+
+On Linux, the complete Unix socket path, including the alias suffix, must not
+exceed 107 bytes when encoded as UTF-8.
 
 | Platform | Endpoint for alias `github-work` |
 | --- | --- |
@@ -162,6 +168,8 @@ lookup rules, so prefer `.\alice` or `DOMAIN\alice`.
 To prevent a key from being loaded automatically on every computer, add an
 `IfDevice` string field to the entry on the **Advanced** tab. It is matched
 against `Environment.MachineName` and does not affect manual key loading.
+KeePass placeholders in the field are expanded before the patterns are
+evaluated.
 
 Comma-separated patterns are supported:
 
