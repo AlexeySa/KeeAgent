@@ -322,20 +322,11 @@ namespace KeeAgent {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Enable per-entry Windows OpenSSH pipes (KeeAgentPipe).
+        ///   Looks up a localized string similar to Enable per-entry SSH agent endpoints (Windows pipes / Linux sockets).
         /// </summary>
-        internal static string OptionUsePerEntryWindowsOpenSshPipes {
+        internal static string OptionUsePerEntryAgentEndpoints {
             get {
-                return ResourceManager.GetString("OptionUsePerEntryWindowsOpenSshPipes", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Allow configured Windows identities to access agents.
-        /// </summary>
-        internal static string OptionUseWindowsOpenSshAllowedUsers {
-            get {
-                return ResourceManager.GetString("OptionUseWindowsOpenSshAllowedUsers", resourceCulture);
+                return ResourceManager.GetString("OptionUsePerEntryAgentEndpoints", resourceCulture);
             }
         }
         

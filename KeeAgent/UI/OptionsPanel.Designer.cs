@@ -33,8 +33,8 @@
             this.modeComboBox = new System.Windows.Forms.ComboBox();
             this.modeLabel = new System.Windows.Forms.Label();
             this.helpButton = new System.Windows.Forms.Button();
-            this.windowsOpenSshAllowedUsersLabel = new System.Windows.Forms.Label();
-            this.windowsOpenSshAllowedUsersTextBox = new System.Windows.Forms.TextBox();
+            this.additionalAgentUsersLabel = new System.Windows.Forms.Label();
+            this.additionalAgentUsersTextBox = new System.Windows.Forms.TextBox();
             this.socketPanel = new System.Windows.Forms.Panel();
             this.msysPathBrowseButton = new System.Windows.Forms.Button();
             this.wslSocketPathBrowseButton = new System.Windows.Forms.Button();
@@ -90,15 +90,15 @@
             this.helpButton.UseVisualStyleBackColor = true;
             this.helpButton.Click += new System.EventHandler(this.helpButton_Click);
             // 
-            // windowsOpenSshAllowedUsersLabel
+            // additionalAgentUsersLabel
             // 
-            resources.ApplyResources(this.windowsOpenSshAllowedUsersLabel, "windowsOpenSshAllowedUsersLabel");
-            this.windowsOpenSshAllowedUsersLabel.Name = "windowsOpenSshAllowedUsersLabel";
+            resources.ApplyResources(this.additionalAgentUsersLabel, "additionalAgentUsersLabel");
+            this.additionalAgentUsersLabel.Name = "additionalAgentUsersLabel";
             // 
-            // windowsOpenSshAllowedUsersTextBox
+            // additionalAgentUsersTextBox
             // 
-            resources.ApplyResources(this.windowsOpenSshAllowedUsersTextBox, "windowsOpenSshAllowedUsersTextBox");
-            this.windowsOpenSshAllowedUsersTextBox.Name = "windowsOpenSshAllowedUsersTextBox";
+            resources.ApplyResources(this.additionalAgentUsersTextBox, "additionalAgentUsersTextBox");
+            this.additionalAgentUsersTextBox.Name = "additionalAgentUsersTextBox";
             // 
             // socketPanel
             // 
@@ -201,8 +201,8 @@
             resources.ApplyResources(this, "$this");
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.Controls.Add(this.socketPanel);
-            this.Controls.Add(this.windowsOpenSshAllowedUsersTextBox);
-            this.Controls.Add(this.windowsOpenSshAllowedUsersLabel);
+            this.Controls.Add(this.additionalAgentUsersTextBox);
+            this.Controls.Add(this.additionalAgentUsersLabel);
             this.Controls.Add(this.helpButton);
             this.Controls.Add(this.modeLabel);
             this.Controls.Add(this.modeComboBox);
@@ -222,8 +222,8 @@
         private System.Windows.Forms.ComboBox modeComboBox;
         private System.Windows.Forms.Label modeLabel;
         private System.Windows.Forms.Button helpButton;
-        private System.Windows.Forms.Label windowsOpenSshAllowedUsersLabel;
-        private System.Windows.Forms.TextBox windowsOpenSshAllowedUsersTextBox;
+        private System.Windows.Forms.Label additionalAgentUsersLabel;
+        private System.Windows.Forms.TextBox additionalAgentUsersTextBox;
         private System.Windows.Forms.Panel socketPanel;
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.TextBox msysSocketPathTextBox;

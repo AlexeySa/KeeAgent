@@ -51,6 +51,8 @@ namespace KeeAgentTestProject
       /* test case options */
            
       bool requestedLoggingEnabled = true;
+      bool requestedUsePerEntryAgentEndpoints = true;
+      string requestedAdditionalAgentUsers = "user-that-does-not-exist";
       string requestedLogFileName =
           Environment.GetEnvironmentVariable("TEMP");
       if (string.IsNullOrEmpty(requestedLogFileName)) {
@@ -72,6 +74,9 @@ namespace KeeAgentTestProject
 
       requestedOptions.LoggingEnabled = requestedLoggingEnabled;
       requestedOptions.LogFileName = requestedLogFileName;
+      requestedOptions.UsePerEntryAgentEndpoints =
+          requestedUsePerEntryAgentEndpoints;
+      requestedOptions.AdditionalAgentUsers = requestedAdditionalAgentUsers;
 
 
       /* first instance of KeePass is used to set options to 
@@ -96,6 +101,10 @@ namespace KeeAgentTestProject
                 td1RequestedOptions.LoggingEnabled;
             td1KeeAgentExt.Options.LogFileName =
                 td1RequestedOptions.LogFileName;
+            td1KeeAgentExt.Options.UsePerEntryAgentEndpoints =
+                td1RequestedOptions.UsePerEntryAgentEndpoints;
+            td1KeeAgentExt.Options.AdditionalAgentUsers =
+                td1RequestedOptions.AdditionalAgentUsers;
             var extType = td1KeeAgentExt.GetType ();
             var saveGlobalOptionsMethod =
               extType.GetMethod ("SaveGlobalOptions",
@@ -128,6 +137,10 @@ namespace KeeAgentTestProject
         Options actual = (Options)testDomain2.GetData(optionsPropertyName);
         Assert.AreEqual(requestedLoggingEnabled, actual.LoggingEnabled);
         Assert.AreEqual(requestedLogFileName, actual.LogFileName);
+        Assert.AreEqual(requestedUsePerEntryAgentEndpoints,
+            actual.UsePerEntryAgentEndpoints);
+        Assert.AreEqual(requestedAdditionalAgentUsers,
+            actual.AdditionalAgentUsers);
       }
     }
   }

@@ -1,37 +1,94 @@
-name: Build PLGX
+name: Build KeeAgent
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: write
 
 jobs:
   build:
-
     runs-on: windows-2022
 
     steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
 
-    - name: Install prerequisites
-      run: |
-        choco install keepass.install --version=2.61.1
-        New-Item -ItemType Directory -Force .\KeePass | Out-Null
-        $keePassExe = Join-Path $env:ProgramW6432 'KeePass Password Safe 2\KeePass.exe'
-        Copy-Item $keePassExe .\KeePass\KeePass.exe
+      - name: Install prerequisites
+        shell: powershell
+        run: |
+          choco install keepass.install --version=2.61.1 -y
 
-    - name: Setup MSBuild.exe
-      uses: microsoft/setup-msbuild@v2
+          New-Item -ItemType Directory -Force .\KeePass | Out-Null
 
-    - name: Restore
-      run: msbuild KeeAgent.sln /t:Restore
+          $keePassExe = Join-Path $env:ProgramW6432 "KeePass Password Safe 2\KeePass.exe"
 
-    - name: Build PLGX
-      run: msbuild KeeAgent.sln /t:Build /p:Configuration=ReleasePlgx
+          if (-not (Test-Path $keePassExe)) {
+            throw "KeePass.exe not found: $keePassExe"
+          }
 
-    - name: List PLGX
-      run: ~\.nuget\packages\plgxtool\1.0.3\tools\PlgxTool.exe -l .\KeeAgent\bin\ReleasePlgx\KeeAgent.plgx
+          Copy-Item $keePassExe .\KeePass\KeePass.exe
 
-    - uses: actions/upload-artifact@v4
-      with:
-        name: KeeAgent.plgx
-        path: KeeAgent/bin/ReleasePlgx/KeeAgent.plgx
+      - name: Setup MSBuild.exe
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore
+        run: msbuild KeeAgent.sln /t:Restore
+
+      - name: Build PLGX
+        run: msbuild KeeAgent.sln /t:Build /p:Configuration=ReleasePlgx
+
+      - name: List PLGX
+        shell: powershell
+        run: |
+          & "$HOME\.nuget\packages\plgxtool\1.0.3\tools\PlgxTool.exe" `
+            -l ".\KeeAgent\bin\ReleasePlgx\KeeAgent.plgx"
+
+      - name: Build DLL
+        run: msbuild KeeAgent.sln /t:Build /p:Configuration=ReleaseDll
+
+      - name: Check build files
+        shell: powershell
+        run: |
+          $plgx = ".\KeeAgent\bin\ReleasePlgx\KeeAgent.plgx"
+          $dll = ".\KeeAgent\bin\ReleaseDll\KeeAgent.dll"
+
+          if (-not (Test-Path $plgx)) {
+            throw "PLGX not found: $plgx"
+          }
+
+          if (-not (Test-Path $dll)) {
+            throw "DLL not found: $dll"
+          }
+
+          Get-Item $plgx | Format-List FullName, Length
+          Get-Item $dll | Format-List FullName, Length
+
+      - name: Upload PLGX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KeeAgent-PLGX
+          path: KeeAgent/bin/ReleasePlgx/KeeAgent.plgx
+          if-no-files-found: error
+
+      - name: Upload DLL artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KeeAgent-DLL
+          path: KeeAgent/bin/ReleaseDll/KeeAgent.dll
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" `
+            ".\KeeAgent\bin\ReleasePlgx\KeeAgent.plgx" `
+            ".\KeeAgent\bin\ReleaseDll\KeeAgent.dll" `
+            --title "${{ github.ref_name }}" `
+            --generate-notes

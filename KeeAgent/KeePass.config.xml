@@ -73,6 +73,14 @@
 			<Value>false</Value>
 		</Item>
 		<Item>
+			<Key>KeeAgent.UsePerEntryAgentEndpoints</Key>
+			<Value>false</Value>
+		</Item>
+		<Item>
+			<Key>KeeAgent.AdditionalAgentUsers</Key>
+			<Value></Value>
+		</Item>
+		<Item>
 			<Key>KeeAgent.UnixSocketPath</Key>
 			<Value></Value>
 		</Item>

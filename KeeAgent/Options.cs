@@ -97,22 +97,15 @@ namespace KeeAgent
 
     /// <summary>
     /// When true, entries with a KeeAgentPipe custom field expose their keys
-    /// through dedicated, restricted Windows OpenSSH named pipes.
+    /// through dedicated, restricted platform agent endpoints.
     /// </summary>
-    public bool UsePerEntryWindowsOpenSshPipes { get; set; }
+    public bool UsePerEntryAgentEndpoints { get; set; }
 
     /// <summary>
-    /// When true, the identities in <see cref="WindowsOpenSshAllowedUsers"/>
-    /// are allowed to access Windows agents. Users apply to Pageant and the
-    /// Windows OpenSSH agent pipe; groups apply only to the pipe.
+    /// Additional operating system users allowed to access agent endpoints.
+    /// The user running KeePass is always allowed.
     /// </summary>
-    public bool UseWindowsOpenSshAllowedUsers { get; set; }
-
-    /// <summary>
-    /// Additional Windows users and groups allowed to access Windows agents,
-    /// separated by semicolons.
-    /// </summary>
-    public string WindowsOpenSshAllowedUsers { get; set; }
+    public string AdditionalAgentUsers { get; set; }
 
     /// <summary>
     /// The path for creating a unix socket in Agent mode on unix-like platforms

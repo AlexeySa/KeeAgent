@@ -76,8 +76,10 @@ namespace KeeAgent
       new HashSet<string>(StringComparer.Ordinal);
     readonly HashSet<string> runningRestrictedPipeNames =
       new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    readonly Dictionary<string, string> runningRestrictedUnixSocketPaths =
+      new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
     readonly object keyMetadataSyncRoot = new object();
-    readonly object restrictedPipeSyncRoot = new object();
+    readonly object restrictedEndpointSyncRoot = new object();
     KeeAgentColumnProvider columnProvider;
     KeeAgentUiThread _uiThread;
 
@@ -98,12 +100,10 @@ namespace KeeAgent
     const string inheritSocketFilePermissionsOptionName =
       pluginNamespace + ".InheritSocketFilePermissions";
     const string useWindowsOpenSshPipeName = pluginNamespace + ".UseWindowsOpenSshPipe";
-    const string usePerEntryWindowsOpenSshPipesOptionName =
-      pluginNamespace + ".UsePerEntryWindowsOpenSshPipes";
-    const string useWindowsOpenSshAllowedUsersOptionName =
-      pluginNamespace + ".UseWindowsOpenSshAllowedUsers";
-    const string windowsOpenSshAllowedUsersOptionName =
-      pluginNamespace + ".WindowsOpenSshAllowedUsers";
+    const string usePerEntryAgentEndpointsOptionName =
+      pluginNamespace + ".UsePerEntryAgentEndpoints";
+    const string additionalAgentUsersOptionName =
+      pluginNamespace + ".AdditionalAgentUsers";
     const string unixSocketPathOptionName = pluginNamespace + ".UnixSocketPath";
     const string userPicksKeyOnRequestIdentitiesOptionName =
       pluginNamespace + ".UserPicksKeyOnRequestIdentities";
@@ -171,10 +171,9 @@ namespace KeeAgent
             // In windows, try to start an agent. If Pageant is running, we will
             // get an exception.
             try {
-              var allowedIdentitySids =
-                GetConfiguredWindowsAgentAllowedIdentitySids();
+              var allowedUserSids = GetConfiguredWindowsAgentAllowedUserSids();
               var pagent = new PageantAgent(
-                GetConfiguredPageantAllowedUserSids(allowedIdentitySids));
+                allowedUserSids);
               pagent.Locked += PageantAgent_Locked;
               pagent.KeyUsed += PageantAgent_KeyUsed;
               pagent.KeyAdded += PageantAgent_KeyAdded;
@@ -200,7 +199,7 @@ namespace KeeAgent
                 StartWslSocket();
               }
               if (Options.UseWindowsOpenSshPipe) {
-                StartWindowsOpenSshPipe(allowedIdentitySids);
+                StartWindowsOpenSshPipe(allowedUserSids);
               }
             }
             catch (PageantRunningException) {
@@ -241,7 +240,8 @@ namespace KeeAgent
               else {
                 try {
                   var socketPath = Options.UnixSocketPath.ExpandEnvironmentVariables();
-                  unixAgent.StartUnixSocket(socketPath);
+                  unixAgent.StartUnixSocket(socketPath,
+                    GetConfiguredUnixPeerAuthorizer());
                 }
                 catch (Exception ex) {
                   MessageService.ShowWarning(ex.Message);
@@ -502,7 +502,7 @@ namespace KeeAgent
 
     public void StartWindowsOpenSshPipe()
     {
-      StartWindowsOpenSshPipe(GetConfiguredWindowsAgentAllowedIdentitySids());
+      StartWindowsOpenSshPipe(GetConfiguredWindowsAgentAllowedUserSids());
     }
 
     private void StartWindowsOpenSshPipe(
@@ -532,23 +532,20 @@ namespace KeeAgent
       if (pagent == null)
         return;
 
-      var allowedIdentitySids = GetConfiguredWindowsAgentAllowedIdentitySids();
-      pagent.SetPageantAllowedUserSids(
-        GetConfiguredPageantAllowedUserSids(allowedIdentitySids));
+      var allowedUserSids = GetConfiguredWindowsAgentAllowedUserSids();
+      pagent.SetPageantAllowedUserSids(allowedUserSids);
 
-      lock (restrictedPipeSyncRoot) {
+      lock (restrictedEndpointSyncRoot) {
         pagent.StopRestrictedWindowsOpenSshPipes();
         runningRestrictedPipeNames.Clear();
       }
 
+      StopWindowsOpenSsh();
       if (Options.UseWindowsOpenSshPipe) {
-        StartWindowsOpenSshPipe(allowedIdentitySids);
-      }
-      else {
-        StopWindowsOpenSsh();
+        StartWindowsOpenSshPipe(allowedUserSids);
       }
 
-      ReconcileRestrictedWindowsOpenSshPipes(allowedIdentitySids);
+      ReconcileRestrictedWindowsOpenSshPipes(allowedUserSids);
     }
 
     public void StopWindowsOpenSsh()
@@ -562,42 +559,29 @@ namespace KeeAgent
     private void ReconcileRestrictedWindowsOpenSshPipes()
     {
       ReconcileRestrictedWindowsOpenSshPipes(
-        GetConfiguredWindowsAgentAllowedIdentitySids());
+        GetConfiguredWindowsAgentAllowedUserSids());
     }
 
     private void ReconcileRestrictedWindowsOpenSshPipes(
-      IEnumerable<SecurityIdentifier> allowedIdentitySids)
+      IEnumerable<SecurityIdentifier> allowedUserSids)
     {
       var pagent = agent as PageantAgent;
       if (pagent == null) {
         return;
       }
 
-      lock (restrictedPipeSyncRoot) {
+      lock (restrictedEndpointSyncRoot) {
         ReconcileRestrictedWindowsOpenSshPipesCore(
-          pagent, allowedIdentitySids);
+          pagent, allowedUserSids);
       }
     }
 
     private void ReconcileRestrictedWindowsOpenSshPipesCore(
       PageantAgent pagent,
-      IEnumerable<SecurityIdentifier> allowedIdentitySids)
+      IEnumerable<SecurityIdentifier> allowedUserSids)
     {
 
-      var desiredAliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-      if (Options.UsePerEntryWindowsOpenSshPipes) {
-        var loadedFingerprints = new HashSet<string>(
-          agent.ListKeys().Select(k => k.GetSha256Fingerprint()),
-          StringComparer.Ordinal);
-        lock (keyMetadataSyncRoot) {
-          foreach (var item in loadedKeyMetadata) {
-            if (loadedFingerprints.Contains(item.Key)
-                && !string.IsNullOrEmpty(item.Value.PipeAlias)) {
-              desiredAliases.Add(item.Value.PipeAlias);
-            }
-          }
-        }
-      }
+      var desiredAliases = GetDesiredRestrictedEndpointAliases();
 
       foreach (var pipeName in runningRestrictedPipeNames.ToList()) {
         var alias = pipeName.Substring(restrictedPipePrefix.Length);
@@ -618,7 +602,7 @@ namespace KeeAgent
           pagent.StartWindowsOpenSshPipe(
             pipeName,
             key => IsKeyMappedToPipe(key, capturedAlias),
-            allowedIdentitySids);
+            allowedUserSids);
           runningRestrictedPipeNames.Add(pipeName);
         }
         catch (Exception ex) {
@@ -629,20 +613,40 @@ namespace KeeAgent
       }
     }
 
-    internal static string NormalizeWindowsIdentityNames(string identityNames)
+    private HashSet<string> GetDesiredRestrictedEndpointAliases()
     {
-      return string.Join("; ", ParseWindowsIdentityNames(identityNames));
+      var desiredAliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+      if (!Options.UsePerEntryAgentEndpoints) {
+        return desiredAliases;
+      }
+
+      var loadedFingerprints = new HashSet<string>(
+        agent.ListKeys().Select(k => k.GetSha256Fingerprint()),
+        StringComparer.Ordinal);
+      lock (keyMetadataSyncRoot) {
+        foreach (var item in loadedKeyMetadata) {
+          if (loadedFingerprints.Contains(item.Key)
+              && !string.IsNullOrEmpty(item.Value.PipeAlias)) {
+            desiredAliases.Add(item.Value.PipeAlias);
+          }
+        }
+      }
+      return desiredAliases;
     }
 
-    internal static List<SecurityIdentifier> ResolveWindowsIdentityNames(
-      string identityNames, out List<string> unresolvedIdentityNames)
+    internal static string NormalizeAgentUserNames(string userNames)
+    {
+      return string.Join("; ", ParseAgentUserNames(userNames));
+    }
+
+    internal static List<SecurityIdentifier> ResolveWindowsUserNames(
+      string userNames)
     {
       var resolvedSids = new List<SecurityIdentifier>();
       var uniqueSids = new HashSet<SecurityIdentifier>();
-      unresolvedIdentityNames = new List<string>();
 
-      foreach (var identityName in ParseWindowsIdentityNames(identityNames)) {
-        var nameToResolve = identityName;
+      foreach (var userName in ParseAgentUserNames(userNames)) {
+        var nameToResolve = userName;
         if (nameToResolve.StartsWith(@".\", StringComparison.Ordinal)) {
           nameToResolve = Environment.MachineName + nameToResolve.Substring(1);
         }
@@ -650,48 +654,21 @@ namespace KeeAgent
         try {
           var sid = (SecurityIdentifier)new NTAccount(nameToResolve)
             .Translate(typeof(SecurityIdentifier));
-          if (uniqueSids.Add(sid)) {
+          if (IsWindowsUserSid(sid) && uniqueSids.Add(sid)) {
             resolvedSids.Add(sid);
           }
         }
-        catch (IdentityNotMappedException) {
-          unresolvedIdentityNames.Add(identityName);
+        catch (SystemException) {
+          // Unknown users are intentionally ignored.
         }
       }
 
       return resolvedSids;
     }
 
-    private List<SecurityIdentifier> GetConfiguredWindowsAgentAllowedIdentitySids()
+    private List<SecurityIdentifier> GetConfiguredWindowsAgentAllowedUserSids()
     {
-      var allowedIdentitySids = new List<SecurityIdentifier>();
-      if (!Options.UseWindowsOpenSshAllowedUsers) {
-        return allowedIdentitySids;
-      }
-
-      List<string> unresolvedIdentityNames;
-      allowedIdentitySids = ResolveWindowsIdentityNames(
-        Options.WindowsOpenSshAllowedUsers, out unresolvedIdentityNames);
-      if (unresolvedIdentityNames.Count > 0) {
-        MessageService.ShowWarning(
-          "Some Windows agent access entries could not be resolved and were ignored:",
-          string.Join(Environment.NewLine, unresolvedIdentityNames));
-      }
-
-      return allowedIdentitySids;
-    }
-
-    private static List<SecurityIdentifier> GetConfiguredPageantAllowedUserSids(
-      IEnumerable<SecurityIdentifier> allowedIdentitySids)
-    {
-      var allowedUserSids = new List<SecurityIdentifier>();
-      foreach (var sid in allowedIdentitySids) {
-        if (IsWindowsUserSid(sid)) {
-          allowedUserSids.Add(sid);
-        }
-      }
-
-      return allowedUserSids;
+      return ResolveWindowsUserNames(Options.AdditionalAgentUsers);
     }
 
     private static bool IsWindowsUserSid(SecurityIdentifier sid)
@@ -718,15 +695,15 @@ namespace KeeAgent
       return accountType == SidNameUse.User;
     }
 
-    private static List<string> ParseWindowsIdentityNames(string identityNames)
+    private static List<string> ParseAgentUserNames(string userNames)
     {
       var result = new List<string>();
-      var uniqueNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-      if (string.IsNullOrWhiteSpace(identityNames)) {
+      var uniqueNames = new HashSet<string>(StringComparer.Ordinal);
+      if (string.IsNullOrWhiteSpace(userNames)) {
         return result;
       }
 
-      var names = identityNames.Split(new[] { ";", "\r\n", "\n", "\r" },
+      var names = userNames.Split(new[] { ";", "\r\n", "\n", "\r" },
         StringSplitOptions.None);
       foreach (var name in names) {
         var trimmedName = name.Trim();
@@ -738,16 +715,111 @@ namespace KeeAgent
       return result;
     }
 
+    private Func<UnixPeerCredentials, bool> GetConfiguredUnixPeerAuthorizer()
+    {
+      if (string.IsNullOrWhiteSpace(Options.AdditionalAgentUsers)) {
+        return null;
+      }
+
+      var allowedUserIds = new HashSet<int> { UnixAgent.GetCurrentUserId() };
+      foreach (var userName in ParseAgentUserNames(Options.AdditionalAgentUsers)) {
+        int userId;
+        if (UnixAgent.TryResolveUserId(userName, out userId)) {
+          allowedUserIds.Add(userId);
+        }
+      }
+      return peer => allowedUserIds.Contains(peer.UserId);
+    }
+
+    internal static string GetRestrictedUnixSocketPath(
+      string unixSocketPath, string alias)
+    {
+      var basePath = Path.GetFullPath(
+        unixSocketPath.ExpandEnvironmentVariables());
+      var restrictedPath = basePath + "." + alias;
+      if (Encoding.UTF8.GetByteCount(restrictedPath) > 107) {
+        throw new PathTooLongException(
+          "Unix socket path must not exceed 107 UTF-8 bytes.");
+      }
+      return restrictedPath;
+    }
+
+    private void ReconcileRestrictedUnixSockets()
+    {
+      var unixAgent = agent as UnixAgent;
+      if (unixAgent == null || string.IsNullOrWhiteSpace(Options.UnixSocketPath)) {
+        return;
+      }
+
+      lock (restrictedEndpointSyncRoot) {
+        var desiredAliases = GetDesiredRestrictedEndpointAliases();
+        foreach (var running in runningRestrictedUnixSocketPaths.ToList()) {
+          string desiredPath = null;
+          if (desiredAliases.Contains(running.Key)) {
+            try {
+              desiredPath = GetRestrictedUnixSocketPath(
+                Options.UnixSocketPath, running.Key);
+            }
+            catch {
+              // The invalid desired path is reported below when creation is tried.
+            }
+          }
+          if (!string.Equals(running.Value, desiredPath,
+              StringComparison.Ordinal)) {
+            unixAgent.StopRestrictedUnixSocket(running.Value);
+            runningRestrictedUnixSocketPaths.Remove(running.Key);
+          }
+        }
+
+        var peerAuthorizer = GetConfiguredUnixPeerAuthorizer();
+        foreach (var alias in desiredAliases) {
+          if (runningRestrictedUnixSocketPaths.ContainsKey(alias)) {
+            continue;
+          }
+
+          try {
+            var socketPath = GetRestrictedUnixSocketPath(
+              Options.UnixSocketPath, alias);
+            var capturedAlias = alias;
+            unixAgent.StartRestrictedUnixSocket(
+              socketPath,
+              key => IsKeyMappedToPipe(key, capturedAlias),
+              peerAuthorizer);
+            runningRestrictedUnixSocketPaths.Add(alias, socketPath);
+          }
+          catch (Exception ex) {
+            MessageService.ShowWarning(
+              string.Format("Failed to start Unix agent socket for '{0}':", alias),
+              ex.Message);
+          }
+        }
+      }
+    }
+
+    private void ReconcileRestrictedAgentEndpoints()
+    {
+      if (agent is PageantAgent) {
+        ReconcileRestrictedWindowsOpenSshPipes();
+      }
+      else if (agent is UnixAgent) {
+        ReconcileRestrictedUnixSockets();
+      }
+    }
+
     public void StartUnixSocket()
     {
       var unixAgent = agent as UnixAgent;
       if (unixAgent == null)
         return;
       try {
+        lock (restrictedEndpointSyncRoot) {
+          unixAgent.StopRestrictedUnixSockets();
+          runningRestrictedUnixSocketPaths.Clear();
+        }
         unixAgent.StopUnixSocket();
         var socketPath = Options.UnixSocketPath.ExpandEnvironmentVariables();
-        unixAgent.StartUnixSocket(Environment.ExpandEnvironmentVariables(
-          socketPath));
+        unixAgent.StartUnixSocket(socketPath, GetConfiguredUnixPeerAuthorizer());
+        ReconcileRestrictedUnixSockets();
       }
       catch (Exception ex) {
         MessageService.ShowWarning("Failed to start Unix socket:",
@@ -761,6 +833,10 @@ namespace KeeAgent
       var unixAgent = agent as UnixAgent;
       if (unixAgent == null)
         return;
+      lock (restrictedEndpointSyncRoot) {
+        unixAgent.StopRestrictedUnixSockets();
+        runningRestrictedUnixSocketPaths.Clear();
+      }
       unixAgent.StopUnixSocket();
     }
 
@@ -921,12 +997,10 @@ namespace KeeAgent
       config.SetBool(inheritSocketFilePermissionsOptionName,
         Options.InheritSocketFilePermissions);
       config.SetBool(useWindowsOpenSshPipeName, Options.UseWindowsOpenSshPipe);
-      config.SetBool(usePerEntryWindowsOpenSshPipesOptionName,
-        Options.UsePerEntryWindowsOpenSshPipes);
-      config.SetBool(useWindowsOpenSshAllowedUsersOptionName,
-        Options.UseWindowsOpenSshAllowedUsers);
-      config.SetString(windowsOpenSshAllowedUsersOptionName,
-        Options.WindowsOpenSshAllowedUsers);
+      config.SetBool(usePerEntryAgentEndpointsOptionName,
+        Options.UsePerEntryAgentEndpoints);
+      config.SetString(additionalAgentUsersOptionName,
+        Options.AdditionalAgentUsers);
       config.SetString(unixSocketPathOptionName, Options.UnixSocketPath);
       config.SetBool(userPicksKeyOnRequestIdentitiesOptionName,
         Options.UserPicksKeyOnRequestIdentities);
@@ -952,12 +1026,10 @@ namespace KeeAgent
       Options.InheritSocketFilePermissions =
         config.GetBool(inheritSocketFilePermissionsOptionName, false);
       Options.UseWindowsOpenSshPipe = config.GetBool(useWindowsOpenSshPipeName, false);
-      Options.UsePerEntryWindowsOpenSshPipes =
-        config.GetBool(usePerEntryWindowsOpenSshPipesOptionName, false);
-      Options.UseWindowsOpenSshAllowedUsers =
-        config.GetBool(useWindowsOpenSshAllowedUsersOptionName, false);
-      Options.WindowsOpenSshAllowedUsers =
-        config.GetString(windowsOpenSshAllowedUsersOptionName) ?? string.Empty;
+      Options.UsePerEntryAgentEndpoints =
+        config.GetBool(usePerEntryAgentEndpointsOptionName, false);
+      Options.AdditionalAgentUsers =
+        config.GetString(additionalAgentUsersOptionName) ?? string.Empty;
       Options.UnixSocketPath = config.GetString(unixSocketPathOptionName);
       Options.UserPicksKeyOnRequestIdentities =
         config.GetBool(userPicksKeyOnRequestIdentitiesOptionName, false);
@@ -1077,8 +1149,7 @@ namespace KeeAgent
         if (settings.AllowUseOfSshKey) {
           string errorMessage = null;
           var pipeAlias = GetPipeAlias(entryForm.EntryRef);
-          if (Environment.OSVersion.Platform == PlatformID.Win32NT
-              && !string.IsNullOrEmpty(pipeAlias) && !IsValidPipeAlias(pipeAlias)) {
+          if (!string.IsNullOrEmpty(pipeAlias) && !IsValidPipeAlias(pipeAlias)) {
             errorMessage = "KeeAgentPipe must be 1-64 ASCII characters and may contain only letters, digits, '.', '_' and '-'.";
           }
           switch (settings.Location.SelectedType) {
@@ -1181,7 +1252,7 @@ namespace KeeAgent
           loadedKeyMetadata.Remove(fingerprint);
         }
       }
-      ReconcileRestrictedWindowsOpenSshPipes();
+      ReconcileRestrictedAgentEndpoints();
       if (Options.AlwaysConfirm && !e.Key.HasConstraint(
             Agent.KeyConstraintType.SSH_AGENT_CONSTRAIN_CONFIRM)) {
         var constraint = new Agent.KeyConstraint();
@@ -1506,8 +1577,7 @@ namespace KeeAgent
       var configuredPipeAlias = GetPipeAlias(entry);
 
       try {
-        if (Environment.OSVersion.Platform == PlatformID.Win32NT
-            && !string.IsNullOrEmpty(configuredPipeAlias)
+        if (!string.IsNullOrEmpty(configuredPipeAlias)
             && !IsValidPipeAlias(configuredPipeAlias)) {
           throw new InvalidPipeAliasException(
             "KeeAgentPipe must be 1-64 ASCII characters and may contain only letters, digits, '.', '_' and '-'.");
@@ -1591,7 +1661,7 @@ namespace KeeAgent
           }
         }
 
-        ReconcileRestrictedWindowsOpenSshPipes();
+        ReconcileRestrictedAgentEndpoints();
 
         if (settings.Location.SelectedType == EntrySettings.LocationType.Attachment
           && settings.Location.SaveAttachmentToTempFile) {
@@ -1757,7 +1827,7 @@ namespace KeeAgent
           loadedKeyMetadata[fingerprint] = CreateLoadedKeyMetadata(
             entry, entry.GetKeeAgentSettings());
         }
-        ReconcileRestrictedWindowsOpenSshPipes();
+        ReconcileRestrictedAgentEndpoints();
       }
       catch (Exception ex) {
         Debug.Fail(ex.ToString());
@@ -1775,24 +1845,38 @@ namespace KeeAgent
         return new KeyDisplayInfo { LoadMode = "Manual" };
       }
 
-      var hasPipe = Environment.OSVersion.Platform == PlatformID.Win32NT
+      var hasEndpoint = (agent is PageantAgent || agent is UnixAgent)
         && !string.IsNullOrEmpty(metadata.PipeAlias);
-      var isAutomaticPipe = metadata.AddAtDatabaseOpen && hasPipe;
-      var pipeEnabled = Options.UsePerEntryWindowsOpenSshPipes;
+      var isAutomaticEndpoint = metadata.AddAtDatabaseOpen && hasEndpoint;
+      var endpointEnabled = Options.UsePerEntryAgentEndpoints;
+      var isWindowsEndpoint = agent is PageantAgent;
+      var endpointTitle = isWindowsEndpoint
+        ? "Windows OpenSSH pipes"
+        : "Unix sockets";
+      string endpointToolTip = string.Empty;
+      if (hasEndpoint) {
+        try {
+          endpointToolTip = isWindowsEndpoint
+            ? @"\\.\pipe\" + restrictedPipePrefix + metadata.PipeAlias
+            : GetRestrictedUnixSocketPath(
+                Options.UnixSocketPath, metadata.PipeAlias);
+        }
+        catch (Exception ex) {
+          endpointToolTip = ex.Message;
+        }
+      }
       return new KeyDisplayInfo {
-        LoadMode = isAutomaticPipe
-          ? "Pipe"
+        LoadMode = isAutomaticEndpoint
+          ? "Endpoint"
           : metadata.AddAtDatabaseOpen ? "Auto" : "Manual",
-        OpenSshPipe = hasPipe
-          ? metadata.PipeAlias + (pipeEnabled ? string.Empty : " (disabled)")
+        OpenSshPipe = hasEndpoint
+          ? metadata.PipeAlias + (endpointEnabled ? string.Empty : " (disabled)")
           : string.Empty,
-        OpenSshPipeToolTip = hasPipe
-          ? @"\\.\pipe\" + restrictedPipePrefix + metadata.PipeAlias
-          : string.Empty,
-        UseDedicatedTab = isAutomaticPipe,
-        DedicatedTabTitle = pipeEnabled
-          ? "Windows OpenSSH pipes"
-          : "Windows OpenSSH pipes (disabled)",
+        OpenSshPipeToolTip = endpointToolTip,
+        UseDedicatedTab = isAutomaticEndpoint,
+        DedicatedTabTitle = endpointEnabled
+          ? endpointTitle
+          : endpointTitle + " (disabled)",
       };
     }
 
@@ -1823,7 +1907,7 @@ namespace KeeAgent
         }
       }
 
-      ReconcileRestrictedWindowsOpenSshPipes();
+      ReconcileRestrictedAgentEndpoints();
     }
 
     IEnumerable<ISshKey> FilterKeyList(

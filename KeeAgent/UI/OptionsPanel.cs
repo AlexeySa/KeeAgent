@@ -2,7 +2,6 @@
 // Copyright (c) 2012-2017,2022 David Lechner <david@lechnology.com>
 
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Windows.Forms;
@@ -18,10 +17,31 @@ namespace KeeAgent.UI
     KeeAgentExt ext;
     CheckedLVItemDXList optionsList;
     bool isUnix;
+    LinkLabel agentAccessHelpLinkLabel;
+    ToolTip agentAccessToolTip;
 
     public OptionsPanel(KeeAgentExt ext)
     {
       InitializeComponent();
+      agentAccessHelpLinkLabel = new LinkLabel {
+        Text = "?",
+        AutoSize = true,
+        Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
+        Location = new Point(
+          additionalAgentUsersLabel.Right + 4,
+          additionalAgentUsersLabel.Top),
+        TabStop = true,
+        AccessibleName = "Show agent access help",
+      };
+      agentAccessHelpLinkLabel.LinkClicked += AgentAccessHelpLinkLabel_LinkClicked;
+      Controls.Add(agentAccessHelpLinkLabel);
+      agentAccessHelpLinkLabel.BringToFront();
+      if (components == null) {
+        components = new System.ComponentModel.Container();
+      }
+      agentAccessToolTip = new ToolTip(components);
+      agentAccessToolTip.SetToolTip(agentAccessHelpLinkLabel,
+        "Show agent access help");
       if (Type.GetType("Mono.Runtime") != null) {
         const int xOffset = -30;
         const int yOffset = -30;
@@ -79,24 +99,18 @@ namespace KeeAgent.UI
        Translatable.OptionUnlockOnActivity);
       optionsList.CreateItem(ext.Options, "UserPicksKeyOnRequestIdentities",
         agentModeOptionsGroup, Translatable.OptionUserPicksKeyOnRequestIdentities);
+      optionsList.CreateItem(ext.Options, "UsePerEntryAgentEndpoints",
+        agentModeOptionsGroup, Translatable.OptionUsePerEntryAgentEndpoints);
       if (!isUnix) {
         optionsList.CreateItem(ext.Options, "InheritSocketFilePermissions",
           agentModeOptionsGroup, Translatable.OptionInheritSocketFilePermissions);
         optionsList.CreateItem(ext.Options, "UseWindowsOpenSshPipe",
           agentModeOptionsGroup, Translatable.OptionUseWindowsOpenSshPipe);
-        optionsList.CreateItem(ext.Options, "UsePerEntryWindowsOpenSshPipes",
-          agentModeOptionsGroup, Translatable.OptionUsePerEntryWindowsOpenSshPipes);
-        optionsList.CreateItem(ext.Options, "UseWindowsOpenSshAllowedUsers",
-          agentModeOptionsGroup, Translatable.OptionUseWindowsOpenSshAllowedUsers);
       }
 
       columnHeader.Width = customListViewEx.ClientRectangle.Width -
         UIUtil.GetVScrollBarWidth() - 1;
       if (isUnix) {
-        windowsOpenSshAllowedUsersLabel.Visible = false;
-        windowsOpenSshAllowedUsersTextBox.Visible = false;
-        customListViewEx.Height = socketPanel.Top + cygwinPathBrowseButton.Top
-          - customListViewEx.Top - customListViewEx.Margin.Bottom;
         useCygwinSocketCheckBox.Visible = false;
         cygwinSocketPathTextBox.Text = ext.Options.UnixSocketPath;
         cygwinSocketPathTextBox.Enabled = true;
@@ -111,9 +125,6 @@ namespace KeeAgent.UI
         wslSocketPathBrowseButton.Visible = false;
       }
       else {
-        windowsOpenSshAllowedUsersTextBox.Text =
-          KeeAgentExt.NormalizeWindowsIdentityNames(
-            ext.Options.WindowsOpenSshAllowedUsers);
         useCygwinSocketCheckBox.Checked = ext.Options.UseCygwinSocket;
         cygwinSocketPathTextBox.Text = ext.Options.CygwinSocketPath;
         useMsysSocketCheckBox.Checked = ext.Options.UseMsysSocket;
@@ -121,6 +132,8 @@ namespace KeeAgent.UI
         useWslSocketCheckBox.Checked = ext.Options.UseWslSocket;
         wslSocketPathTextBox.Text = ext.Options.WslSocketPath;
       }
+      additionalAgentUsersTextBox.Text =
+        KeeAgentExt.NormalizeAgentUserNames(ext.Options.AdditionalAgentUsers);
       optionsList.UpdateData(false);
     }
 
@@ -147,19 +160,6 @@ namespace KeeAgent.UI
               MessageService.ShowWarning("Must specify path for WSL socket file.");
               e2.Cancel = true;
               return;
-            }
-            if (!isUnix) {
-              List<string> unresolvedIdentityNames;
-              KeeAgentExt.ResolveWindowsIdentityNames(
-                windowsOpenSshAllowedUsersTextBox.Text,
-                out unresolvedIdentityNames);
-              if (unresolvedIdentityNames.Count > 0) {
-                MessageService.ShowWarning(
-                  "The following Windows agent access entries could not be resolved:",
-                  string.Join(Environment.NewLine, unresolvedIdentityNames));
-                e2.Cancel = true;
-                return;
-              }
             }
             if (isUnix && modeComboBox.Text != Translatable.OptionAgentModeClient
               && string.IsNullOrWhiteSpace(cygwinSocketPathTextBox.Text)) {
@@ -214,9 +214,6 @@ namespace KeeAgent.UI
         ext.Options.UnixSocketPath = cygwinSocketPathTextBox.Text;
       }
       else {
-        ext.Options.WindowsOpenSshAllowedUsers =
-          KeeAgentExt.NormalizeWindowsIdentityNames(
-            windowsOpenSshAllowedUsersTextBox.Text);
         ext.Options.UseCygwinSocket = useCygwinSocketCheckBox.Checked;
         ext.Options.CygwinSocketPath = cygwinSocketPathTextBox.Text;
         ext.Options.UseMsysSocket = useMsysSocketCheckBox.Checked;
@@ -224,6 +221,27 @@ namespace KeeAgent.UI
         ext.Options.UseWslSocket = useWslSocketCheckBox.Checked;
         ext.Options.WslSocketPath = wslSocketPathTextBox.Text;
       }
+      ext.Options.AdditionalAgentUsers =
+        KeeAgentExt.NormalizeAgentUserNames(
+          additionalAgentUsersTextBox.Text);
+    }
+
+    void AgentAccessHelpLinkLabel_LinkClicked(
+      object sender, LinkLabelLinkClickedEventArgs e)
+    {
+      const string helpText =
+        "Give additional OS users access to SSH agent endpoints.\r\n" +
+        "Separate user names with semicolons.\r\n" +
+        "The KeePass owner always has access.\r\n" +
+        "Unknown users are silently ignored.\r\n\r\n" +
+        "Linux:\r\n" +
+        "- Empty: only the KeePass owner is allowed; sockets use mode 0600.\r\n" +
+        "- Non-empty: sockets use mode 0666 and every client is verified by UID.\r\n" +
+        "- Applies to the main and per-entry Unix sockets.\r\n\r\n" +
+        "Windows:\r\n" +
+        "- Additional users can access Pageant and Windows OpenSSH named pipes.";
+      MessageBox.Show(ParentForm, helpText, "KeeAgent agent access",
+        MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     void helpButton_Click(object sender, EventArgs e)
