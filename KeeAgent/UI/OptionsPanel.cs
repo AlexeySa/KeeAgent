@@ -221,7 +221,7 @@ namespace KeeAgent.UI
       object sender, LinkLabelLinkClickedEventArgs e)
     {
       const string helpText =
-        "Give additional OS users access to SSH agent endpoints.\r\n" +
+        "Give additional OS users access to selected SSH agent endpoints.\r\n" +
         "Separate user names with semicolons.\r\n" +
         "The KeePass owner always has access.\r\n" +
         "Unknown users are silently ignored.\r\n\r\n" +
@@ -232,6 +232,7 @@ namespace KeeAgent.UI
         "- Example: alice; bob\r\n\r\n" +
         "Windows:\r\n" +
         "- Additional users can access Pageant and Windows OpenSSH named pipes.\r\n" +
+        "- Does not apply to Cygwin, MSYSGit, or WSL1 sockets.\r\n" +
         "- An unqualified name such as alice is ambiguous; Windows resolves it using system account lookup rules.\r\n" +
         "- .\\bob means the local user bob on the current computer.\r\n" +
         "- Example: .\\bob; CONTOSO\\carol";
