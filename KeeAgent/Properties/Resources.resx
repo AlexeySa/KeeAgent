@@ -146,7 +146,7 @@
     <comment>FIXME: page does not have anchor</comment>
   </data>
   <data name="WebHelpGlobalOptions" xml:space="preserve">
-    <value>https://keeagent.readthedocs.io/en/v0.12.1/usage/options.html#global-options</value>
+    <value>https://keeagent.readthedocs.io/en/latest/usage/options.html#global-options</value>
   </data>
   <data name="WebHelpHome" xml:space="preserve">
     <value>https://keeagent.readthedocs.io</value>

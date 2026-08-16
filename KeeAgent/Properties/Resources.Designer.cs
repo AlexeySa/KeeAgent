@@ -137,7 +137,7 @@ namespace KeeAgent.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to https://keeagent.readthedocs.io/en/v0.12.1/usage/options.html#global-options.
+        ///   Looks up a localized string similar to https://keeagent.readthedocs.io/en/latest/usage/options.html#global-options.
         /// </summary>
         internal static string WebHelpGlobalOptions {
             get {
