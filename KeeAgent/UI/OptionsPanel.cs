@@ -17,39 +17,30 @@ namespace KeeAgent.UI
     KeeAgentExt ext;
     CheckedLVItemDXList optionsList;
     bool isUnix;
-    LinkLabel agentAccessHelpLinkLabel;
-    ToolTip agentAccessToolTip;
 
     public OptionsPanel(KeeAgentExt ext)
     {
       InitializeComponent();
-      agentAccessHelpLinkLabel = new LinkLabel {
-        Text = "?",
-        AutoSize = true,
-        Anchor = AnchorStyles.Bottom | AnchorStyles.Left,
-        Location = new Point(
-          additionalAgentUsersLabel.Right + 4,
-          additionalAgentUsersLabel.Top),
-        TabStop = true,
-        AccessibleName = "Show agent access help",
-      };
-      agentAccessHelpLinkLabel.LinkClicked += AgentAccessHelpLinkLabel_LinkClicked;
-      Controls.Add(agentAccessHelpLinkLabel);
-      agentAccessHelpLinkLabel.BringToFront();
-      if (components == null) {
-        components = new System.ComponentModel.Container();
-      }
-      agentAccessToolTip = new ToolTip(components);
-      agentAccessToolTip.SetToolTip(agentAccessHelpLinkLabel,
-        "Show agent access help");
       if (Type.GetType("Mono.Runtime") != null) {
         const int xOffset = -30;
         const int yOffset = -30;
         helpButton.Left += xOffset;
+        additionalAgentUsersHelpLinkLabel.Left += xOffset;
         customListViewEx.Width += xOffset;
         socketPanel.Width += xOffset;
         socketPanel.Height += yOffset;
       }
+      const int accessControlGap = 6;
+      additionalAgentUsersLabel.Width =
+        additionalAgentUsersLabel.GetPreferredSize(Size.Empty).Width;
+      var accessTextBoxLeft = additionalAgentUsersLabel.Right
+        + accessControlGap;
+      additionalAgentUsersTextBox.SetBounds(
+        accessTextBoxLeft,
+        additionalAgentUsersTextBox.Top,
+        Math.Max(1, additionalAgentUsersHelpLinkLabel.Left
+          - accessControlGap - accessTextBoxLeft),
+        additionalAgentUsersTextBox.Height);
 
       this.ext = ext;
       isUnix = Environment.OSVersion.Platform == PlatformID.Unix
@@ -226,7 +217,7 @@ namespace KeeAgent.UI
           additionalAgentUsersTextBox.Text);
     }
 
-    void AgentAccessHelpLinkLabel_LinkClicked(
+    void additionalAgentUsersHelpLinkLabel_LinkClicked(
       object sender, LinkLabelLinkClickedEventArgs e)
     {
       const string helpText =
@@ -237,9 +228,13 @@ namespace KeeAgent.UI
         "Linux:\r\n" +
         "- Empty: only the KeePass owner is allowed; sockets use mode 0600.\r\n" +
         "- Non-empty: sockets use mode 0666 and every client is verified by UID.\r\n" +
-        "- Applies to the main and per-entry Unix sockets.\r\n\r\n" +
+        "- Applies to the main and per-entry Unix sockets.\r\n" +
+        "- Example: alice; bob\r\n\r\n" +
         "Windows:\r\n" +
-        "- Additional users can access Pageant and Windows OpenSSH named pipes.";
+        "- Additional users can access Pageant and Windows OpenSSH named pipes.\r\n" +
+        "- An unqualified name such as alice is ambiguous; Windows resolves it using system account lookup rules.\r\n" +
+        "- .\\bob means the local user bob on the current computer.\r\n" +
+        "- Example: .\\bob; CONTOSO\\carol";
       MessageBox.Show(ParentForm, helpText, "KeeAgent agent access",
         MessageBoxButtons.OK, MessageBoxIcon.Information);
     }

@@ -35,6 +35,7 @@
             this.helpButton = new System.Windows.Forms.Button();
             this.additionalAgentUsersLabel = new System.Windows.Forms.Label();
             this.additionalAgentUsersTextBox = new System.Windows.Forms.TextBox();
+            this.additionalAgentUsersHelpLinkLabel = new System.Windows.Forms.LinkLabel();
             this.socketPanel = new System.Windows.Forms.Panel();
             this.msysPathBrowseButton = new System.Windows.Forms.Button();
             this.wslSocketPathBrowseButton = new System.Windows.Forms.Button();
@@ -99,7 +100,18 @@
             // 
             resources.ApplyResources(this.additionalAgentUsersTextBox, "additionalAgentUsersTextBox");
             this.additionalAgentUsersTextBox.Name = "additionalAgentUsersTextBox";
-            // 
+            //
+            // additionalAgentUsersHelpLinkLabel
+            //
+            resources.ApplyResources(this.additionalAgentUsersHelpLinkLabel, "additionalAgentUsersHelpLinkLabel");
+            this.additionalAgentUsersHelpLinkLabel.AccessibleName = "Show agent access help";
+            this.additionalAgentUsersHelpLinkLabel.Font = new System.Drawing.Font(this.additionalAgentUsersHelpLinkLabel.Font, System.Drawing.FontStyle.Bold);
+            this.additionalAgentUsersHelpLinkLabel.LinkBehavior = System.Windows.Forms.LinkBehavior.HoverUnderline;
+            this.additionalAgentUsersHelpLinkLabel.Name = "additionalAgentUsersHelpLinkLabel";
+            this.additionalAgentUsersHelpLinkLabel.TabStop = true;
+            this.additionalAgentUsersHelpLinkLabel.Text = "?";
+            this.additionalAgentUsersHelpLinkLabel.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.additionalAgentUsersHelpLinkLabel_LinkClicked);
+            //
             // socketPanel
             // 
             resources.ApplyResources(this.socketPanel, "socketPanel");
@@ -201,6 +213,7 @@
             resources.ApplyResources(this, "$this");
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.Controls.Add(this.socketPanel);
+            this.Controls.Add(this.additionalAgentUsersHelpLinkLabel);
             this.Controls.Add(this.additionalAgentUsersTextBox);
             this.Controls.Add(this.additionalAgentUsersLabel);
             this.Controls.Add(this.helpButton);
@@ -224,6 +237,7 @@
         private System.Windows.Forms.Button helpButton;
         private System.Windows.Forms.Label additionalAgentUsersLabel;
         private System.Windows.Forms.TextBox additionalAgentUsersTextBox;
+        private System.Windows.Forms.LinkLabel additionalAgentUsersHelpLinkLabel;
         private System.Windows.Forms.Panel socketPanel;
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.TextBox msysSocketPathTextBox;
